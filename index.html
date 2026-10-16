@@ -242,6 +242,21 @@ section{margin-top:28px}
 .choice.in .dot{background:var(--accent)}
 .shotok{color:var(--good);font-weight:700}
 .shotbox .thumbs img{width:72px;height:72px}
+.actrow{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.actrow .morebtn{margin-top:0}
+.morebtn.main{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.prow{border:1px solid var(--line);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:12px;background:var(--bg)}
+.prh{display:flex;justify-content:space-between;align-items:center}
+.prh button{background:none;border:1px solid var(--line);border-radius:10px;padding:6px 10px;font-size:.82rem;color:var(--miss);font-weight:700}
+.pseg{display:flex;gap:6px;flex-wrap:wrap}
+.pseg button{flex:1 1 auto;border:1.5px solid var(--line);background:var(--surface);border-radius:12px;padding:11px 12px;font-weight:700;font-size:.92rem;min-width:0}
+.pseg button[aria-pressed="true"]{border-color:var(--ink);background:var(--ink);color:var(--bg)}
+.dayshots{margin-top:12px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.dayshots .dsh{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.dayshots .thumbs img{width:64px;height:64px;cursor:zoom-in}
+.dayshots .shotbtn{padding:10px}
+.viewer .vdel{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));top:auto;right:auto;width:auto;height:auto;border-radius:12px;padding:10px 16px;font-size:.95rem;font-weight:700;background:rgba(255,255,255,.15)}
+.tag.wa{border-color:#25a244;color:#1d8a39}
 </style>
 </head>
 <body>
@@ -259,7 +274,7 @@ section{margin-top:28px}
   <div id="tab-today">
     <div id="controls">
       <div class="contacts" id="pad"></div>
-      <button class="morebtn" id="btnMore" type="button">+ Log something else</button>
+      <div class="actrow"><button class="morebtn main" id="btnPastMain" type="button">+ Past event</button><button class="morebtn" id="btnMore" type="button">More…</button></div>
     </div>
 
     <section id="pendingSec" hidden>
@@ -270,6 +285,7 @@ section{margin-top:28px}
     <section>
       <div class="sechead"><h2>Today</h2><span class="muted small mono" id="todayDate"></span></div>
       <div class="entries" id="todayList"></div>
+      <div id="todayShots"></div>
     </section>
 
     <section>
@@ -292,6 +308,7 @@ section{margin-top:28px}
     <section>
       <div class="sechead"><h2 id="dayTitle"></h2><span class="muted small" id="dayCount"></span></div>
       <div class="entries" id="dayList"></div>
+      <div id="dayShots"></div>
     </section>
   </div>
 
@@ -329,7 +346,7 @@ section{margin-top:28px}
 "use strict";
 // ---------- state ----------
 const DEFAULT_CFG={child:"Cass",phones:{mum:{label:"Christie",number:""},gran:{label:"May",number:""}},others:[]};
-const S={entries:[],cfg:JSON.parse(JSON.stringify(DEFAULT_CFG)),cfgLoaded:false,db:null,assets:null,downloads:null,
+const S={days:{},entries:[],cfg:JSON.parse(JSON.stringify(DEFAULT_CFG)),cfgLoaded:false,db:null,assets:null,downloads:null,
   canWrite:true,lastBackup:null,backupLoaded:false,
   dbState:"loading",tab:"today",selDay:null,month:null,logFilter:"all",activeCallId:null,hiddenAt:null};
 const $=id=>document.getElementById(id);
@@ -383,8 +400,10 @@ function contact(key){
   if(key==="cass")return {label:child(),number:""};
   const o=(S.cfg.others||[]).find(o=>o.id===key);return o?{label:o.label,number:(o.number||"").trim()}:{label:"Someone else",number:""};
 }
-const telHref=n=>"tel:"+n.replace(/[^\d+]/g,"");
-const smsHref=n=>"sms:"+n.replace(/[^\d+]/g,"");
+const useWA=()=>S.cfg.whatsapp!==false;
+function intlDigits(n){let d=String(n||"").trim();const plus=d.startsWith("+");d=d.replace(/[^\d]/g,"");if(plus)return d;if(d.startsWith("00"))return d.slice(2);if(d.startsWith("0"))return String(S.cfg.cc||"44").replace(/[^\d]/g,"")+d.slice(1);return d}
+const telHref=n=>useWA()?"whatsapp://send?phone="+intlDigits(n):"tel:"+n.replace(/[^\d+]/g,"");
+const smsHref=n=>useWA()?"whatsapp://send?phone="+intlDigits(n):"sms:"+n.replace(/[^\d+]/g,"");
 const live=()=>S.entries.filter(e=>!e.voided&&!e.test);
 const isOutContact=e=>e.type!=="note"&&dirOf(e)==="out";
 
@@ -460,7 +479,8 @@ async function uploadFiles(files){
 function baseEntry(type,dir,who,at,backfilled){
   const c=contact(who);const now=new Date().toISOString();
   return {id:newId(),type,direction:dir,to:who,toLabel:c.label,toNumber:c.number,at:at||now,loggedAt:now,tz,
-    outcome:null,outcomeAt:null,comment:"",backfilled:!!backfilled,voided:false,test:!!S.cfg.testMode,attachments:[],history:[]};
+    outcome:null,outcomeAt:null,comment:"",backfilled:!!backfilled,voided:false,test:!!S.cfg.testMode,attachments:[],history:[],
+    via:backfilled?null:(useWA()?"whatsapp":"phone")};
 }
 const GROUP_MS=30*60000;
 function openGroupFor(e){
@@ -521,7 +541,7 @@ function moreSheet(){
     <div class="menu">
       <button type="button" data-menu="in"><b>They contacted me</b><span>A call or text from Christie, May, Cass or anyone else, including missed calls</span></button>
       <button type="button" data-menu="note"><b>Add a note</b><span>A cancelled visit, missed handover or event</span></button>
-      <button type="button" data-menu="past"><b>Add a past call or text</b><span>Something you forgot to log at the time</span></button>
+      <button type="button" data-menu="past"><b>Past events</b><span>Calls or texts you didn't log at the time, one or several at once</span></button>
     </div>`,{kind:"menu"});
 }
 function whatOf(e){
@@ -540,9 +560,16 @@ async function hydrateBlobs(root){
 }
 new MutationObserver(()=>hydrateBlobs()).observe(document.body,{childList:true,subtree:true});
 document.addEventListener("click",ev=>{
-  const img=ev.target.closest(".sheet img[data-blob]");if(!img||!img.src)return;
-  const v=document.createElement("div");v.className="viewer";v.innerHTML=`<img alt="Screenshot" src="${img.src}"><button type="button" aria-label="Close">×</button>`;
-  v.addEventListener("click",()=>v.remove());document.body.appendChild(v);
+  const img=ev.target.closest(".sheet img[data-blob],.dayshots img[data-blob]");if(!img||!img.src)return;
+  const ds=img.dataset.dayshot;
+  const v=document.createElement("div");v.className="viewer";v.innerHTML=`<img alt="Screenshot" src="${img.src}"><button type="button" aria-label="Close">×</button>${ds&&S.canWrite?`<button type="button" class="vdel">Remove this screenshot</button>`:""}`;
+  v.addEventListener("click",async e2=>{
+    const del=e2.target.closest(".vdel");
+    if(del){e2.stopPropagation();if(!del.dataset.sure){del.dataset.sure="1";del.textContent="Tap again to remove it";return}
+      const [k,id]=ds.split("|");const cur=((S.days[k]||{}).shots)||[];S.days[k]={shots:cur.filter(a=>a.id!==id)};
+      await S.db.collection("days").doc(k).set(S.days[k]);v.remove();render();toast("Screenshot removed");return}
+    v.remove()});
+  document.body.appendChild(v);
 });
 const needsReply=e=>S.canWrite&&e.type==="text"&&dirOf(e)==="out"&&!e.voided&&(!e.outcome||e.outcome==="no_reply")&&(dayKey(e.at)===dayKey(new Date())||!e.outcome);
 function entryHTML(e,opts={}){
@@ -556,6 +583,7 @@ function entryCore(e,opts={}){
   else pill=`<span class="pill pend">${e.type==="text"?"Waiting for reply":"Tap to add what happened"}</span>`;
   const tags=[];
   if(dirOf(e)==="in"&&e.type!=="note")tags.push('<span class="tag">they contacted you</span>');
+  if(e.via==="whatsapp"&&dirOf(e)==="out")tags.push('<span class="tag wa">WhatsApp</span>');
   if(e.backfilled)tags.push('<span class="tag">added later</span>');
   if((e.history||[]).some(h=>Object.keys(h.changes||{}).some(k=>k!=="attachments")))tags.push('<span class="tag">edited</span>');
   if(e.test)tags.push('<span class="tag" style="border-color:var(--pend);color:var(--pend);font-weight:700">test</span>');
@@ -595,6 +623,13 @@ function renderToday(){
   const list=S.entries.filter(e=>dayKey(e.at)===k).slice().reverse();
   $("todayList").innerHTML=list.length?listHTML(list):
     `<div class="empty">${S.dbState==="loading"?"Loading your log…":(S.canWrite?"Nothing logged yet today. Tap a button above when you call or text. The time is saved the moment you tap.":"Nothing logged today.")}</div>`;
+  $("todayShots").innerHTML=dayShotsHTML(k);
+}
+function dayShotsHTML(k){
+  const shots=((S.days[k]||{}).shots)||[];
+  return `<div class="dayshots"><div class="dsh"><b>Screenshots for this day</b><span class="small muted">${shots.length?shots.length+" saved":"None yet"}</span></div>
+    ${shots.length?`<div class="thumbs">${shots.map(a=>`<img alt="Screenshot" data-blob="${esc(a.id)}" data-dayshot="${k}|${esc(a.id)}"${blobURLs[a.id]?` src="${blobURLs[a.id]}"`:""}>`).join("")}</div>`:""}
+    ${S.canWrite?`<label class="shotbtn filepick">${shots.length?"Add more screenshots":"Add screenshots for this day"}<input type="file" accept="image/*" multiple data-dayfile="${k}"></label><span class="small" data-daystatus="${k}" role="status"></span>`:""}</div>`;
 }
 function groupByDay(list){const m={};for(const e of list){(m[dayKey(e.at)]=m[dayKey(e.at)]||[]).push(e)}return m}
 function dayStatus(k,byDay){
@@ -652,6 +687,7 @@ function renderCal(){
   $("dayTitle").textContent=fmtDayLong(fromKey(S.selDay));
   $("dayCount").textContent=list.length?list.length+(list.length===1?" entry":" entries"):"";
   $("dayList").innerHTML=list.length?listHTML(list):`<div class="empty">Nothing logged on this day.</div>`;
+  $("dayShots").innerHTML=dayShotsHTML(S.selDay);
 }
 function matchFilter(e,f){
   if(f==="all")return true;
@@ -697,7 +733,7 @@ function entrySheet(id,{justLogged}={}){
   openSheet(`
     <div class="sh"><div><h2>${title}</h2><div class="muted small">${sub}<span class="mono">${esc(fmtDay(e.at))}, ${esc(fmtTime(e.at))}</span></div></div>${closeBtn}</div>
     ${!ro&&groupMembers(e).length>=2?`<div class="groupnote"><span>${justLogged?"Added to your current entry":"Part of an entry"} with ${groupMembers(e).length-1} other ${groupMembers(e).length===2?"step":"steps"}.</span><button type="button" data-ungroup>${justLogged?"Start a new entry instead":"Make it separate"}</button></div>`:""}
-    ${justLogged&&n?`<div class="callinfo"><span>If your phone didn't open, ${e.type==="call"?"call":"text"} <span class="mono">${esc(n)}</span>, then come back here.</span><button class="copy" type="button" data-copy="${esc(n)}">Copy</button></div>`:justLogged?`<div class="callinfo"><span>Time logged. ${e.type==="call"?"Call":"Text"} ${esc(e.toLabel)} from your phone, then come back here to record what happened.</span></div>`:""}
+    ${justLogged&&n?`<div class="callinfo"><span>${e.via==="whatsapp"?(e.type==="call"?"WhatsApp should open on the chat. Tap the call button at the top to ring. ":"WhatsApp should open on the chat. ")+"If it didn't, the number is":"If your phone didn't open, "+(e.type==="call"?"call":"text")} <span class="mono">${esc(n)}</span>${e.via==="whatsapp"?".":", then come back here."}</span><button class="copy" type="button" data-copy="${esc(n)}">Copy</button></div>`:justLogged?`<div class="callinfo"><span>Time logged. ${e.type==="call"?"Call":"Text"} ${esc(e.toLabel)} from your phone, then come back here to record what happened.</span></div>`:""}
     ${textShot}
     ${opts.length>1?`<div class="field"><span class="label">${dir==="in"?"What happened?":e.type==="call"?"What happened?":"Their reply"}</span>
       <div class="choices">${opts.map(o=>`<button type="button" class="choice ${o.tone}" data-outcome="${o.k}" aria-pressed="${e.outcome===o.k}" ${ro?"disabled":""}><span class="dot"></span>${esc(o.label)}</button>`).join("")}</div></div>`:""}
@@ -719,7 +755,7 @@ function entrySheet(id,{justLogged}={}){
     </dl>
     ${hist?`<div class="hist"><span class="label">Edit history</span>${hist}</div>`:""}
     ${e.test&&!ro&&!justLogged?`<button class="secondary" type="button" data-untest>This was real, not a test</button>`:""}
-    ${justLogged||ro?"":`<div id="voidZone">${e.voided?`<button class="secondary" type="button" data-unvoid>Restore this entry</button>`:`<button class="danger" type="button" data-voidask>Mark as a mistake</button>`}</div>`}
+    ${justLogged||ro?"":`<div id="voidZone">${e.voided?`<button class="secondary" type="button" data-unvoid>Restore this entry</button>`:`<button class="danger" type="button" data-voidask>Mark as a mistake</button>`}<button class="danger" type="button" data-delask style="margin-top:8px">Delete event</button></div>`}
   `,{kind:"entry",id,picked:e.outcome});
 }
 function fieldName(k,e){return {test:"test flag",outcome:e.type==="call"?"result":"reply",comment:"comment",voided:"status",at:"time",category:"type of note"}[k]||k}
@@ -737,6 +773,8 @@ function settingsSheet(){
     <div class="row2"><div class="field"><label class="label" for="pChild">Your son's name</label><input id="pChild" value="${esc(c.child)}"></div>
       <div class="field"><label class="label" for="pUkTz">His time zone</label><select id="pUkTz">${[["Europe/London","UK"],["Europe/Dublin","Ireland"],["America/New_York","US Eastern"],["America/Chicago","US Central"],["America/Denver","US Mountain"],["America/Los_Angeles","US Pacific"]].map(([v,l])=>`<option value="${v}" ${v===(c.ukTz||"Europe/London")?"selected":""}>${l}</option>`).join("")}</select></div></div>
     <div class="muted small">Your phone's time zone: ${esc(tz||"unknown")}. Each entry shows your time and his.</div>
+    <label class="orow" style="cursor:pointer"><span class="nm"><b>Open in WhatsApp</b><span class="small muted">Call and Text buttons open the WhatsApp chat instead of your phone and Messages.</span></span><input id="pWA" type="checkbox" style="width:24px;height:24px;flex:none" ${c.whatsapp!==false?"checked":""}></label>
+    <div class="field"><label class="label" for="pCC">Country code for numbers starting with 0</label><input id="pCC" inputmode="numeric" value="${esc(c.cc||"44")}" placeholder="44"><span class="small muted">44 is the UK. A number like 07700 900123 is opened in WhatsApp as +44 7700 900123.</span></div>
     <label class="orow" style="cursor:pointer"><span class="nm"><b>Test mode</b><span class="small muted">New entries are marked as tests and left out of totals and exports.</span></span><input id="pTest" type="checkbox" style="width:24px;height:24px;flex:none" ${c.testMode?"checked":""}></label>
     <button class="primary" type="button" data-savecfg>Save</button>
     ${others?`<div class="field"><span class="label">Other people</span><div class="olist">${others}</div><span class="muted small">Removing someone only takes them off the quick list. Past entries keep their name.</span></div>`:""}
@@ -802,26 +840,100 @@ function noteSheet(){
     <button class="primary" type="button" data-savenote>Save note</button>
   `,{kind:"note",files:[]});
 }
-function pastSheet(opts={}){
-  const people=[["mum",contact("mum").label],["gran",contact("gran").label]].concat((S.cfg.others||[]).map(o=>[o.id,o.label]));
-  openSheet(`
-    <div class="sh"><div><h2>${opts.groupId?"Add another step":"Add a past call or text"}</h2><div class="muted small">${opts.groupId?"This goes in the same entry as the step you just saved.":"It will be marked “added later”, with now as the logged-at time."}</div></div>${closeBtn}</div>
-    ${whenFields()}
-    <div class="row2"><div class="field"><label class="label" for="bType">Type</label><select id="bType"><option value="call">Call</option><option value="text">Text</option></select></div>
-      <div class="field"><label class="label" for="bWho">Phone</label><select id="bWho">${people.map(([k,l])=>`<option value="${esc(k)}">${esc(l)}</option>`).join("")}<option value="__new">Someone else…</option></select></div></div>
-    <div class="field" id="bOtherF" hidden><label class="label" for="bOther">Who</label><input id="bOther" placeholder="e.g. Grandad" autocomplete="off"></div>
-    <div class="field"><label class="label" for="bOut">What happened</label><select id="bOut"></select></div>
-    <div class="field"><label class="label" for="bCmt">Comment</label><textarea id="bCmt"></textarea></div>
-    ${shotPicker("newShot","Add a screenshot if you have one.")}
-    <button class="primary" type="button" data-savepast="done">Save</button>
-    <button class="secondary" type="button" data-savepast="more">Save and add another step</button>
-  `,{kind:"past",files:[],groupId:opts.groupId||null});
-  if(opts.date)$("wDate").value=opts.date;if(opts.time)$("wTime").value=opts.time;
-  if(opts.who&&[...$("bWho").options].some(o=>o.value===opts.who))$("bWho").value=opts.who;
-  const fill=()=>{$("bOut").innerHTML=outcomes($("bType").value,"out").map(o=>`<option value="${o.k}">${esc(o.label)}</option>`).join("")};
-  fill();$("bType").addEventListener("change",fill);
-  $("bWho").addEventListener("change",()=>{$("bOtherF").hidden=$("bWho").value!=="__new"});
+function bumpTime(t){const [h,m]=(t||"12:00").split(":").map(Number);const x=(h*60+m+1)%1440;return pad2(Math.floor(x/60))+":"+pad2(x%60)}
+function blankRow(prev){const n=nowParts();return {who:prev?prev.who:"mum",other:prev?prev.other:"",date:prev?prev.date:n.d,time:prev?bumpTime(prev.time):n.t,type:prev?prev.type:"call",result:null,said:"",replied:null,reply:"",notes:""}}
+function pastSheet(){
+  openSheet(`<div class="sh"><div><h2>Past events</h2><div class="muted small">Add one or several calls and texts you didn't log at the time. They're marked “added later”.</div></div>${closeBtn}</div><div id="pRows" style="display:flex;flex-direction:column;gap:12px"></div>
+    <button class="secondary" type="button" data-padd>+ Add another event</button>
+    <button class="primary" type="button" data-psave id="pSaveBtn">Save</button>`,{kind:"pastmulti",rows:[blankRow()]});
+  renderPast();
 }
+function syncPast(){
+  if(!sheetCtx||sheetCtx.kind!=="pastmulti")return;
+  document.querySelectorAll("[data-pf]").forEach(el=>{const [i,f]=el.dataset.pf.split(":");const r=sheetCtx.rows[+i];if(r)r[f]=el.value});
+}
+function renderPast(){
+  const people=[["mum",contact("mum").label],["gran",contact("gran").label]].concat((S.cfg.others||[]).map(o=>[o.id,o.label]));
+  const today=dayKey(new Date());const c=child();
+  const res=[["spoke","Spoke to "+c],["answered","Answered, not "+c],["no_answer","No answer"],["voicemail","Voicemail"]];
+  const rows=sheetCtx.rows;
+  $("pRows").innerHTML=rows.map((r,i)=>`<div class="prow">
+    <div class="prh"><b>${rows.length>1?"Event "+(i+1):"Event"}</b>${rows.length>1?`<button type="button" data-prm="${i}">Remove</button>`:""}</div>
+    <div class="field"><label class="label" for="pw${i}">Who</label><select id="pw${i}" data-pf="${i}:who" data-pwho="${i}">${people.map(([k,l])=>`<option value="${esc(k)}" ${r.who===k?"selected":""}>${esc(l)}</option>`).join("")}<option value="__new" ${r.who==="__new"?"selected":""}>Someone else…</option></select>
+      ${r.who==="__new"?`<input id="po${i}" data-pf="${i}:other" placeholder="Their name, e.g. Grandad" value="${esc(r.other)}" autocomplete="off">`:""}</div>
+    <div class="row2"><div class="field"><label class="label" for="pd${i}">Date</label><input id="pd${i}" type="date" max="${today}" data-pf="${i}:date" value="${r.date}"></div>
+      <div class="field"><label class="label" for="pt${i}">Time</label><input id="pt${i}" type="time" data-pf="${i}:time" value="${r.time}"></div></div>
+    <div class="pseg"><button type="button" data-ptype="${i}:call" aria-pressed="${r.type==="call"}">Call</button><button type="button" data-ptype="${i}:text" aria-pressed="${r.type==="text"}">Text</button></div>
+    ${r.type==="call"?`
+      <div class="field"><span class="label">What happened</span><div class="pseg">${res.map(([k,l])=>`<button type="button" data-pres="${i}:${k}" aria-pressed="${r.result===k}">${esc(l)}</button>`).join("")}</div></div>
+      <div class="field"><label class="label" for="pn${i}">Notes (optional)</label><textarea id="pn${i}" data-pf="${i}:notes" style="min-height:64px" placeholder="e.g. Rang twice, no answer">${esc(r.notes)}</textarea></div>`
+    :`
+      <div class="field"><label class="label" for="ps${i}">What I texted</label><textarea id="ps${i}" data-pf="${i}:said" style="min-height:64px" placeholder="e.g. Is Cass free for a call tonight?">${esc(r.said)}</textarea></div>
+      <div class="pseg"><button type="button" data-prep="${i}:yes" aria-pressed="${r.replied==="yes"}">Replied</button><button type="button" data-prep="${i}:no" aria-pressed="${r.replied==="no"}">No reply</button></div>
+      ${r.replied==="yes"?`<div class="field"><label class="label" for="pr${i}">What they replied</label><textarea id="pr${i}" data-pf="${i}:reply" style="min-height:64px" placeholder="e.g. He's out, try tomorrow">${esc(r.reply)}</textarea></div>`:""}`}
+  </div>`).join("");
+  $("pSaveBtn").textContent=rows.length>1?`Save ${rows.length} events`:"Save";
+}
+async function savePast(){
+  syncPast();const rows=sheetCtx.rows;
+  for(let i=0;i<rows.length;i++){const r=rows[i];const n=rows.length>1?" for event "+(i+1):"";
+    if(r.who==="__new"&&!r.other.trim()){toast("Add who you contacted"+n);return}
+    if(!r.date||!r.time){toast("Add the date and time"+n);return}
+    if(new Date(r.date+"T"+r.time)>new Date(Date.now()+60000)){toast("That time is in the future"+n);return}
+    if(r.type==="call"&&!r.result){toast("Pick what happened"+n);return}}
+  const groups={};const out=[];
+  for(const r of rows){
+    let who=r.who;if(who==="__new")who=rememberOther(r.other.trim(),"").id;
+    const at=new Date(r.date+"T"+r.time);
+    const e=baseEntry(r.type,"out",who,at.toISOString(),true);
+    if(r.type==="call"){e.outcome=r.result;e.outcomeAt=e.loggedAt;e.comment=r.notes.trim()}
+    else{e.comment=r.said.trim();if(r.replied==="yes"){e.outcome="replied";e.outcomeAt=e.loggedAt}else if(r.replied==="no"){e.outcome="no_reply";e.outcomeAt=e.loggedAt}}
+    out.push(e);
+    if(r.type==="text"&&r.replied==="yes"){
+      const x=baseEntry("text","in",who,new Date(at.getTime()+1000).toISOString(),true);
+      x.toLabel=e.toLabel;x.toNumber=e.toNumber;x.replyTo=e.id;x.outcome="received";x.outcomeAt=x.loggedAt;x.comment=r.reply.trim();
+      out.push(x);
+    }
+  }
+  for(const e of out){const k=dayKey(e.at);(groups[k]=groups[k]||[]).push(e)}
+  for(const list of Object.values(groups)){if(list.length>1){const gid=list[0].id;list.forEach(e=>e.groupId=gid)}}
+  closeSheet();
+  for(const e of out)await upsert(e);
+  const n=rows.length;toast(n===1?"Event added":n+" events added");
+}
+document.addEventListener("click",ev=>{
+  const t=ev.target.closest("[data-ptype],[data-prep],[data-pres],[data-prm],[data-padd],[data-psave]");
+  if(!t||!sheetCtx||sheetCtx.kind!=="pastmulti")return;
+  syncPast();const D=t.dataset;const rows=sheetCtx.rows;
+  if(D.ptype){const [i,v]=D.ptype.split(":");rows[+i].type=v}
+  else if(D.prep){const [i,v]=D.prep.split(":");rows[+i].replied=v}
+  else if(D.pres){const [i,v]=D.pres.split(":");rows[+i].result=v}
+  else if(D.prm!==undefined){rows.splice(+D.prm,1)}
+  else if(D.padd!==undefined){rows.push(blankRow(rows[rows.length-1]));renderPast();const last=$("pRows").lastElementChild;if(last)last.scrollIntoView({behavior:"smooth",block:"start"});return}
+  else if(D.psave!==undefined){savePast();return}
+  renderPast();
+});
+async function deleteEntry(id){
+  S.entries=S.entries.filter(e=>e.id!==id);render();
+  try{await S.db.collection("log").doc(id).delete()}catch(_){toast("Couldn't delete that event. Try again.")}
+}
+document.addEventListener("click",ev=>{
+  const t=ev.target.closest("[data-delask],[data-delyes],[data-delno]");if(!t||!sheetCtx||sheetCtx.kind!=="entry")return;
+  if(t.dataset.delask!==undefined){$("voidZone").innerHTML=`<div class="confirm">Delete this event completely? It will be removed from your log and reports, and can't be brought back.<div class="row2"><button class="secondary" type="button" data-delno>Keep it</button><button class="danger" type="button" data-delyes>Delete</button></div></div>`;return}
+  if(t.dataset.delno!==undefined){entrySheet(sheetCtx.id);return}
+  if(t.dataset.delyes!==undefined){const id=sheetCtx.id;closeSheet();deleteEntry(id);toast("Event deleted")}
+});
+document.addEventListener("change",async ev=>{
+  const k=ev.target.dataset&&ev.target.dataset.dayfile;if(!k)return;
+  const files=Array.from(ev.target.files||[]);if(!files.length)return;
+  const st=document.querySelector(`[data-daystatus="${k}"]`);if(st){st.style.color="";st.textContent="Saving…"}
+  const added=await uploadFiles(files);ev.target.value="";
+  if(!added.length){if(st){st.style.color="var(--miss)";st.textContent="That didn't save. Try again."}return}
+  const cur=((S.days[k]||{}).shots)||[];S.days[k]={shots:[...cur,...added]};
+  await S.db.collection("days").doc(k).set(S.days[k]);render();
+  const st2=document.querySelector(`[data-daystatus="${k}"]`);if(st2){st2.className="small shotok";st2.textContent=`✓ ${added.length} screenshot${added.length===1?"":"s"} saved to ${fmtDay(fromKey(k))}`}
+});
+document.addEventListener("change",ev=>{if(ev.target.dataset&&ev.target.dataset.pwho!==undefined&&sheetCtx&&sheetCtx.kind==="pastmulti"){syncPast();renderPast()}});
 function exportSheet(){
   openSheet(`
     <div class="sh"><h2>Export or back up</h2>${closeBtn}</div>
@@ -845,7 +957,7 @@ function rangeEntries(r){
 function typeName(e){if(e.type==="note")return "Note";return (e.type==="call"?"Call":"Text")+(dirOf(e)==="in"?" received":" made")}
 function rowOf(e){
   const o=outcomeOf(e);
-  const notes=[];const gm=groupMembers(e).filter(x=>!x.test);if(gm.length>=2){const ord=gm.slice().sort((a,b)=>new Date(a.at)-new Date(b.at));notes.push("step "+(ord.findIndex(x=>x.id===e.id)+1)+" of "+gm.length+" in one attempt")}if(e.backfilled)notes.push("added later");{const ed=(e.history||[]).filter(h=>Object.keys(h.changes||{}).some(k=>k!=="attachments")).length;if(ed)notes.push("edited "+ed+"x")}if(e.voided)notes.push("marked as mistake");if((e.attachments||[]).length)notes.push(e.attachments.length+" screenshot(s)");
+  const notes=[];const gm=groupMembers(e).filter(x=>!x.test);if(gm.length>=2){const ord=gm.slice().sort((a,b)=>new Date(a.at)-new Date(b.at));notes.push("step "+(ord.findIndex(x=>x.id===e.id)+1)+" of "+gm.length+" in one attempt")}if(e.via==="whatsapp")notes.push("via WhatsApp");if(e.backfilled)notes.push("added later");{const ed=(e.history||[]).filter(h=>Object.keys(h.changes||{}).some(k=>k!=="attachments")).length;if(ed)notes.push("edited "+ed+"x")}if(e.voided)notes.push("marked as mistake");if((e.attachments||[]).length)notes.push(e.attachments.length+" screenshot(s)");
   const result=e.type==="note"?catLabel(e.category):(o?o.label:(e.type==="text"?"No reply marked":"Not recorded"));
   return {date:new Date(e.at).toLocaleDateString(),time:fmtTime(e.at),uk:ukStamp(e.at),type:typeName(e),phone:e.type==="note"?"":(e.toLabel||"")+(e.toNumber?" ("+e.toNumber+")":""),
     result,comment:e.comment||"",logged:fmtStamp(e.loggedAt),answered:e.outcomeAt&&dirOf(e)==="out"?fmtStamp(e.outcomeAt):"",notes:notes.join(", ")};
@@ -875,14 +987,16 @@ async function restoreBackup(file){
   let added=0,skipped=0;
   for(const [id,url] of Object.entries(data.screenshots||{})){try{const b=await (await fetch(url)).blob();await LocalStore.blobs.put(b,id)}catch(_){}}
   for(const e of data.entries){if(!e||!e.id)continue;if(getEntry(e.id)){skipped++;continue}const {id,...d}=e;await S.db.collection("log").doc(id).set(d);added++}
+  for(const [k,d] of Object.entries(data.days||{})){const cur=((S.days[k]||{}).shots)||[];const ids=new Set(cur.map(a=>a.id));const merged=[...cur,...((d&&d.shots)||[]).filter(a=>!ids.has(a.id))];await S.db.collection("days").doc(k).set({shots:merged})}
   if(data.config&&(!contact("mum").number&&!contact("gran").number)){await S.db.doc("config/main").set(data.config)}
   closeSheet();toast(`Restored ${added} ${added===1?"entry":"entries"}${skipped?`, ${skipped} already here`:""}`);
 }
 async function exportBackup(){
   toast("Preparing backup…");
   const shots={};
-  for(const e of S.entries)for(const a of (e.attachments||[])){if(shots[a.id])continue;try{const b=await LocalStore.blobs.get(a.id);if(b)shots[a.id]=await blobToData(b)}catch(_){}}
-  const ok=await save(`contact-log-backup-${dayKey(new Date())}.json`,JSON.stringify({app:"calls-to-cass",version:1,exported:new Date().toISOString(),timezone:tz,config:S.cfg,entries:S.entries,screenshots:shots}));
+  const all=[...S.entries.flatMap(e=>e.attachments||[]),...Object.values(S.days).flatMap(d=>d.shots||[])];
+  for(const a of all){if(shots[a.id])continue;try{const b=await LocalStore.blobs.get(a.id);if(b)shots[a.id]=await blobToData(b)}catch(_){}}
+  const ok=await save(`contact-log-backup-${dayKey(new Date())}.json`,JSON.stringify({app:"calls-to-cass",version:2,exported:new Date().toISOString(),timezone:tz,config:S.cfg,entries:S.entries,days:S.days,screenshots:shots}));
   if(ok){const at=new Date().toISOString();S.lastBackup=at;render();if(S.db){try{await S.db.doc("config/backup").set({lastAt:at})}catch(_){}}}
 }
 function exportPDF(r){
@@ -901,8 +1015,9 @@ function exportPDF(r){
   const span=r==="all"?(list.length?Math.round((fromKey(dayKey(new Date()))-fromKey(dayKey(list[0].at)))/864e5)+1:0):Number(r);
   const lines=[`Days I called or texted: ${Object.keys(byOut).length} of ${span}`,`Days I spoke to ${child()}: ${spoke}`,
     `Calls made: ${out.filter(e=>e.type==="call").length}   Texts sent: ${out.filter(e=>e.type==="text").length}   Calls/texts received: ${lv.filter(e=>e.type!=="note"&&dirOf(e)==="in").length}   Notes: ${lv.filter(e=>e.type==="note").length}`];
+  {const ks=Object.keys(S.days).filter(k=>(S.days[k].shots||[]).length&&(r==="all"||fromKey(k)>=new Date(new Date().getFullYear(),new Date().getMonth(),new Date().getDate()-(Number(r)-1))));const n=ks.reduce((a,k)=>a+S.days[k].shots.length,0);if(n)lines.push(`Day screenshots kept in the app: ${n} across ${ks.length} day${ks.length===1?"":"s"} (included in the app backup)`)}
   doc.setFontSize(11);lines.forEach((l,i)=>doc.text(l,40,90+i*16));
-  doc.autoTable({startY:140,head:[["Date","My time",UK_LABEL()+" time","Type","Person","Result","Comment","Logged at","Notes"]],
+  doc.autoTable({startY:96+lines.length*16,head:[["Date","My time",UK_LABEL()+" time","Type","Person","Result","Comment","Logged at","Notes"]],
     body:rows.map(x=>[x.date,x.time,x.uk,x.type,x.phone,x.result,x.comment,x.logged,x.notes]),
     styles:{fontSize:7.5,cellPadding:3,overflow:"linebreak"},headStyles:{fillColor:[47,93,138]},
     columnStyles:{0:{cellWidth:44},1:{cellWidth:36},2:{cellWidth:52},3:{cellWidth:38},4:{cellWidth:52},5:{cellWidth:58},6:{cellWidth:"auto"},7:{cellWidth:62},8:{cellWidth:44}},
@@ -986,7 +1101,7 @@ document.addEventListener("click",async ev=>{
   if(D.unvoid!==undefined){changeEntry(sheetCtx.id,{voided:false});closeSheet();toast("Restored");return}
   if(D.savecfg!==undefined){
     const ch=$("pChild").value.trim()||"Cass";
-    S.cfg={...S.cfg,testMode:$("pTest").checked,ukTz:$("pUkTz").value,child:ch,
+    S.cfg={...S.cfg,whatsapp:$("pWA").checked,cc:($("pCC").value.replace(/[^\d]/g,"")||"44"),testMode:$("pTest").checked,ukTz:$("pUkTz").value,child:ch,
       phones:{mum:{label:$("pLab1").value.trim()||"Christie",number:$("pNum1").value.trim()},gran:{label:$("pLab2").value.trim()||"May",number:$("pNum2").value.trim()}}};
     S.cfgLoaded=true;render();closeSheet();await saveCfg();toast("Saved");return}
   if(D.savein!==undefined){
@@ -1010,20 +1125,6 @@ document.addEventListener("click",async ev=>{
     const files=sheetCtx.files;closeSheet();
     if(files.length){toast("Saving screenshot…");e.attachments=await uploadFiles(files)}
     upsert(e);toast("Note saved");return}
-  if(D.savepast!==undefined){
-    const at=readWhen();if(!at)return;
-    let who=$("bWho").value;const type=$("bType").value;
-    if(who==="__new"){const name=$("bOther").value.trim();if(!name){toast("Enter who you contacted");return}who=rememberOther(name,"").id}
-    const e=baseEntry(type,"out",who,at.toISOString(),true);
-    e.outcome=$("bOut").value;e.outcomeAt=e.loggedAt;e.comment=$("bCmt").value.trim();
-    const more=D.savepast==="more";
-    if(sheetCtx.groupId)e.groupId=sheetCtx.groupId;else if(more)e.groupId=e.id;
-    const files=sheetCtx.files;const gid=e.groupId;closeSheet();
-    if(files.length){toast("Saving screenshot…");e.attachments=await uploadFiles(files)}
-    upsert(e);
-    if(more){pastSheet({groupId:gid,date:dayKey(at),time:pad2(at.getHours())+":"+pad2(at.getMinutes()),who});toast("Step saved. Add the next one.")}
-    else toast("Added");
-    return}
   if(D.pdf!==undefined){exportPDF($("xRange").value);return}
   if(D.csv!==undefined){exportCSV($("xRange").value);return}
   if(D.backup!==undefined){exportBackup();return}
@@ -1054,6 +1155,7 @@ document.addEventListener("change",async ev=>{
 });
 $("btnSettings").addEventListener("click",settingsSheet);
 $("btnMore").addEventListener("click",moreSheet);
+$("btnPastMain").addEventListener("click",()=>pastSheet());
 $("btnExport").addEventListener("click",exportSheet);
 $("calPrev").addEventListener("click",()=>{S.month=new Date(S.month.getFullYear(),S.month.getMonth()-1,1);renderCal()});
 $("calNext").addEventListener("click",()=>{S.month=new Date(S.month.getFullYear(),S.month.getMonth()+1,1);renderCal()});
@@ -1084,6 +1186,7 @@ render();
   try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(_){}
   db.doc("config/main").onSnapshot(s=>{if(s.exists){const d=s.data();S.cfg={...DEFAULT_CFG,...d,phones:{...DEFAULT_CFG.phones,...(d.phones||{})},others:(Array.isArray(d.others)?d.others:[]).map((o,i)=>o&&o.id?o:{...o,id:"o_legacy"+i+"_"+String(o&&o.label||"").toLowerCase().replace(/[^a-z0-9]/g,"")})}}S.cfgLoaded=true;render()},()=>{});
   db.doc("config/backup").onSnapshot(s=>{S.lastBackup=s.exists?(s.data().lastAt||null):null;S.backupLoaded=true;render()},()=>{});
+  db.collection("days").onSnapshot(s=>{const m={};s.docs.forEach(d=>{m[d.id]=d.data()});S.days=m;render()},()=>{});
   db.collection("log").onSnapshot(s=>{S.entries=s.docs.map(d=>({id:d.id,...d.data()}));sortEntries();S.dbState="ready";render();
     if(sheetCtx&&sheetCtx.kind==="entry"&&!getEntry(sheetCtx.id))closeSheet();},
     ()=>toast("Couldn't open your log. Close the app and open it again."));
