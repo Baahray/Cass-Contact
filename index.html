@@ -1,0 +1,1046 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Cass">
+<meta name="theme-color" content="#f3f5f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#12171d" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>Calls to Cass</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one-thumb phone log — big action pad on top, a running record below, three tabs pinned to the bottom edge */
+:root{
+  --bg:#f3f5f7; --surface:#ffffff; --ink:#1b2430; --muted:#5d6876; --line:#dde2e8;
+  --accent:#2f5d8a; --accent-ink:#ffffff; --accent-soft:#e3ecf5;
+  --good:#2f7d4f; --good-soft:#e1f1e6; --mid:#a8670f; --mid-soft:#f8ecd7; --miss:#8a3b3b; --miss-soft:#f5e3e3;
+  --pend:#5b4fa3; --pend-soft:#ebe8f7;
+  --f-body:"Atkinson Hyperlegible",-apple-system,"Segoe UI",Roboto,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --nav-h:64px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#12171d; --surface:#1b222b; --ink:#e7ebf0; --muted:#9aa5b2; --line:#2c3540;
+  --accent:#7fb0e0; --accent-ink:#0e1620; --accent-soft:#223244;
+  --good:#7fcf9c; --good-soft:#1d3326; --mid:#e7b36a; --mid-soft:#3a2d18; --miss:#e39a9a; --miss-soft:#3a2222;
+  --pend:#b3a9ef; --pend-soft:#2a2645; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12171d; --surface:#1b222b; --ink:#e7ebf0; --muted:#9aa5b2; --line:#2c3540;
+  --accent:#7fb0e0; --accent-ink:#0e1620; --accent-soft:#223244;
+  --good:#7fcf9c; --good-soft:#1d3326; --mid:#e7b36a; --mid-soft:#3a2d18; --miss:#e39a9a; --miss-soft:#3a2222;
+  --pend:#b3a9ef; --pend-soft:#2a2645; color-scheme:dark}
+
+*{box-sizing:border-box}
+html,body{background:var(--bg)}
+body{color:var(--ink);font:16px/1.45 var(--f-body);-webkit-tap-highlight-color:transparent}
+.wrap{max-width:560px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:14px calc(var(--nav-h) + 28px + env(safe-area-inset-bottom,0px))}
+h1,h2,h3{margin:0;text-wrap:balance}
+h1{font-size:1.5rem;letter-spacing:-.01em}
+h2{font-size:1.05rem}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+.small{font-size:.85rem}
+.label{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700}
+button,a.btn{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+
+header.top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px}
+header.top .sub{color:var(--muted);font-size:.9rem;margin-top:2px}
+.iconbtn{border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:8px 12px;font-size:.9rem;white-space:nowrap}
+
+.banner{background:var(--mid-soft);color:var(--ink);border-radius:12px;padding:12px 14px;margin-bottom:14px;font-size:.92rem}
+.banner b{color:var(--mid)}
+
+/* Action pad */
+.pad{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.act{display:flex;flex-direction:column;justify-content:center;gap:2px;min-height:88px;padding:14px;border-radius:16px;text-decoration:none;border:0;text-align:left}
+.act.call{background:var(--accent);color:var(--accent-ink)}
+.act.text{background:var(--surface);color:var(--ink);border:1px solid var(--line)}
+.act .verb{font-size:.8rem;text-transform:uppercase;letter-spacing:.08em;opacity:.85;font-weight:700}
+.act .who{font-size:1.25rem;font-weight:700}
+.act .num{font-size:.78rem;opacity:.8}
+.act:active{transform:scale(.98)}
+.act.other{grid-column:1/-1;min-height:58px;flex-direction:row;align-items:center;justify-content:space-between;gap:10px;background:var(--surface);color:var(--accent);border:1.5px dashed var(--accent)}
+.act.other .who{font-size:1.05rem}
+.act.other .num{color:var(--muted);opacity:1}
+a.primary,a.secondary{display:block;text-align:center;text-decoration:none}
+a.secondary{color:var(--ink)}
+.addpast{margin-top:10px;width:100%;background:none;border:1px dashed var(--line);border-radius:12px;padding:10px;color:var(--muted);font-size:.9rem}
+
+section{margin-top:22px}
+.sechead{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;gap:8px}
+
+/* Summary */
+.summary{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px}
+.big{font-size:2.1rem;font-weight:700;line-height:1}
+.big small{font-size:1rem;color:var(--muted);font-weight:400}
+.statrow{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.stat .v{font-size:1.15rem;font-weight:700}
+.strip{display:grid;grid-template-columns:repeat(30,1fr);gap:2px;margin-top:12px}
+.strip i{display:block;height:18px;border-radius:3px;background:var(--line)}
+.strip i.good{background:var(--good)}
+.strip i.mid{background:var(--mid)}
+.legend{display:flex;flex-wrap:wrap;gap:12px;margin-top:8px;font-size:.78rem;color:var(--muted)}
+.legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px;background:var(--line)}
+.legend .g::before{background:var(--good)} .legend .m::before{background:var(--mid)}
+
+/* Entries */
+.entries{display:flex;flex-direction:column;gap:8px}
+.entry{display:grid;grid-template-columns:58px 1fr;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px;text-align:left;width:100%}
+.entry.void,.entry.test{opacity:.55}
+.entry.void .what{text-decoration:line-through}
+.entry .t{font-size:.95rem;font-weight:500;padding-top:1px}
+.entry .body{min-width:0;display:flex;flex-direction:column;gap:5px}
+.entry .what{font-weight:700}
+.entry .comment{color:var(--ink);font-size:.93rem;overflow-wrap:anywhere;white-space:pre-wrap}
+.tags{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.pill{display:inline-block;font-size:.78rem;font-weight:700;padding:3px 9px;border-radius:999px}
+.pill.good{background:var(--good-soft);color:var(--good)}
+.pill.mid{background:var(--mid-soft);color:var(--mid)}
+.pill.miss{background:var(--miss-soft);color:var(--miss)}
+.pill.pend{background:var(--pend-soft);color:var(--pend)}
+.tag{font-size:.74rem;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:2px 8px}
+.thumbs{display:flex;gap:6px;flex-wrap:wrap}
+.thumbs img{width:44px;height:44px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
+.empty{background:var(--surface);border:1px dashed var(--line);border-radius:14px;padding:18px;color:var(--muted);font-size:.93rem}
+.dayhead{display:flex;justify-content:space-between;margin:18px 0 6px;font-weight:700;font-size:.92rem}
+.dayhead:first-child{margin-top:0}
+
+/* Calendar */
+.cal{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:12px}
+.calnav{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.calnav button{background:none;border:1px solid var(--line);border-radius:10px;width:40px;height:36px;font-size:1.1rem}
+.grid7{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.dow{text-align:center;font-size:.72rem;color:var(--muted);font-weight:700;padding-bottom:4px}
+.cell{aspect-ratio:1;max-width:100%;border:0;border-radius:10px;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:.88rem;position:relative}
+.cell.out{visibility:hidden}
+.cell.good{background:var(--good);color:#fff}
+.cell.mid{background:var(--mid-soft);color:var(--mid);box-shadow:inset 0 0 0 2px var(--mid)}
+.cell.today{outline:2px solid var(--accent);outline-offset:1px}
+.cell.sel{box-shadow:inset 0 0 0 3px var(--ink)}
+.cell .n{font-size:.62rem;opacity:.85}
+:root[data-theme="dark"] .cell.good{color:#0e1620}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .cell.good{color:#0e1620}}
+
+/* Filters */
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;font-size:.85rem}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+
+/* Bottom nav */
+nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px);padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
+nav.tabs .in{max-width:560px;margin:0 auto;display:grid;grid-template-columns:repeat(3,1fr);height:var(--nav-h)}
+nav.tabs button{background:none;border:0;font-size:.88rem;font-weight:700;color:var(--muted);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px}
+nav.tabs button svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8}
+nav.tabs button[aria-selected="true"]{color:var(--accent)}
+
+/* Sheet */
+.scrim{position:fixed;inset:0;background:rgba(10,14,20,.45);z-index:40}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:41;background:var(--surface);border-radius:20px 20px 0 0;max-height:92%;overflow-y:auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:10px calc(20px + env(safe-area-inset-bottom,0px));box-shadow:0 -8px 30px rgba(0,0,0,.18)}
+.sheet .in{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+.grab{width:42px;height:5px;border-radius:3px;background:var(--line);margin:0 auto 4px}
+.sheet .sh{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.close{background:none;border:0;font-size:1.6rem;line-height:1;color:var(--muted);padding:0 4px}
+.choices{display:flex;flex-direction:column;gap:8px}
+.choice{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:14px;border-radius:14px;border:2px solid var(--line);background:var(--bg);font-weight:700;font-size:1.02rem}
+.choice .dot{width:14px;height:14px;border-radius:50%;flex:none}
+.choice.good .dot{background:var(--good)} .choice.mid .dot{background:var(--mid)} .choice.miss .dot{background:var(--miss)}
+.choice[aria-pressed="true"]{border-color:var(--ink);background:var(--surface)}
+textarea,input,select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:12px;width:100%}
+textarea{min-height:96px;resize:vertical}
+.field{display:flex;flex-direction:column;gap:6px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.row2>*{min-width:0}
+.primary{background:var(--accent);color:var(--accent-ink);border:0;border-radius:14px;padding:15px;font-weight:700;font-size:1.05rem;width:100%}
+.secondary{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:13px;font-weight:700;width:100%}
+.danger{background:none;border:1px solid var(--miss);color:var(--miss);border-radius:14px;padding:12px;font-weight:700;width:100%}
+.callinfo{background:var(--accent-soft);border-radius:12px;padding:12px;font-size:.9rem;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.callinfo .mono{font-size:1rem;user-select:all}
+.copy{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:6px 10px;font-size:.82rem;flex:none}
+.hist{border-top:1px solid var(--line);padding-top:10px;display:flex;flex-direction:column;gap:6px;font-size:.84rem;color:var(--muted)}
+.facts{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:.86rem}
+.facts dt{color:var(--muted)} .facts dd{margin:0}
+.confirm{background:var(--miss-soft);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:10px;font-size:.92rem}
+
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--nav-h) + 16px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:999px;font-size:.9rem;z-index:60;max-width:calc(100% - 32px);text-align:center}
+@media (prefers-reduced-motion: no-preference){
+  .sheet{animation:up .22s ease-out}
+  @keyframes up{from{transform:translateY(30px);opacity:.6}to{transform:none;opacity:1}}
+}
+.pad2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.minor{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px;font-weight:700;font-size:.95rem;text-align:center}
+.pill.note{background:var(--accent-soft);color:var(--accent)}
+.pill.in{background:var(--accent-soft);color:var(--accent)}
+.banner .bbtn{margin-top:8px;display:inline-block;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:7px 12px;font-weight:700;font-size:.88rem}
+.banner+.banner{margin-top:-6px}
+.shotbox{background:var(--accent-soft);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.shotbtn{display:block;text-align:center;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;font-weight:700;cursor:pointer}
+.olist{display:flex;flex-direction:column;gap:8px}
+.orow{display:flex;align-items:center;gap:10px;background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+.orow .nm{flex:1;min-width:0}
+.orow .nm b{display:block}
+.orow a.go{background:var(--accent);color:var(--accent-ink);text-decoration:none;border-radius:12px;padding:10px 14px;font-weight:700;white-space:nowrap}
+.orow .rm{background:none;border:1px solid var(--line);border-radius:10px;padding:6px 10px;font-size:.82rem;color:var(--miss)}
+.cell .nt{position:absolute;top:4px;right:5px;width:6px;height:6px;border-radius:50%;background:var(--accent)}
+.legend .nl::before{border-radius:50%;background:var(--accent);width:7px;height:7px}
+/* Clean layout v2: contact rows */
+.contacts{background:var(--surface);border:1px solid var(--line);border-radius:18px;overflow:hidden}
+.crow{display:flex;align-items:center;gap:12px;padding:14px 14px 14px 16px}
+.crow+.crow{border-top:1px solid var(--line)}
+.crow .cn{flex:1;min-width:0}
+.crow .cn b{display:block;font-size:1.15rem}
+.crow .cn span{font-size:.8rem;color:var(--muted)}
+.crow .cn span.warn{color:var(--mid);font-weight:700}
+.cbtns{display:flex;gap:8px;flex:none}
+.cbtn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:76px;height:46px;padding:0 14px;border-radius:12px;font-weight:700;font-size:.95rem;text-decoration:none;border:0;cursor:pointer}
+.cbtn svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2}
+.cbtn.call{background:var(--accent);color:var(--accent-ink)}
+.cbtn.text{background:var(--accent-soft);color:var(--accent)}
+.cbtn.pick{background:none;border:1px solid var(--line);color:var(--ink);min-width:0}
+.crow.someone b{font-size:1rem;color:var(--muted);font-weight:700}
+.morebtn{margin-top:10px;width:100%;display:flex;align-items:center;justify-content:center;gap:8px;background:none;border:1px solid var(--line);border-radius:14px;padding:12px;color:var(--ink);font-weight:700;font-size:.95rem}
+.menu{display:flex;flex-direction:column;gap:8px}
+.menu button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;padding:14px 16px;border:1px solid var(--line);background:var(--bg);border-radius:14px}
+.menu button b{font-size:1.02rem}
+.menu button span{font-size:.85rem;color:var(--muted)}
+header.top{align-items:center;margin-bottom:18px}
+header.top .sub{display:none}
+.gear{width:42px;height:42px;display:inline-flex;align-items:center;justify-content:center;padding:0}
+.gear svg{width:20px;height:20px;stroke:var(--ink);fill:none;stroke-width:1.8}
+.banner{font-size:.88rem;padding:10px 12px;border-radius:12px}
+section{margin-top:28px}
+.entry{border:0;box-shadow:0 0 0 1px var(--line)}
+.group{background:var(--surface);border-radius:14px;box-shadow:0 0 0 1px var(--line);overflow:hidden}
+.ghead{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 12px;background:var(--bg);border-bottom:1px solid var(--line)}
+.ghead b{font-size:.92rem}
+.ghead .gt{font-size:.8rem;color:var(--muted)}
+.group .entry{box-shadow:none;border-radius:0}
+.group>*+*{border-top:1px solid var(--line)}
+.group>.ghead+*{border-top:0}
+.ewrap{position:relative}
+.ewrap .entry{padding-right:104px}
+.replybtn{position:absolute;top:10px;right:10px;background:var(--accent);color:var(--accent-ink);border:0;border-radius:10px;padding:8px 12px;font-weight:700;font-size:.85rem}
+.groupnote{background:var(--bg);border-radius:12px;padding:10px 12px;font-size:.88rem;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.groupnote button{flex:none;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:6px 10px;font-size:.82rem;font-weight:700}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1 id="hTitle">Calls to Cass</h1>
+      <div class="sub" id="hSub">Every call and text, logged as it happens.</div>
+    </div>
+    <button class="iconbtn gear" id="btnSettings" type="button" aria-label="Phone numbers and settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+  </header>
+  <div id="banners"></div>
+
+  <!-- TODAY -->
+  <div id="tab-today">
+    <div id="controls">
+      <div class="contacts" id="pad"></div>
+      <button class="morebtn" id="btnMore" type="button">+ Log something else</button>
+    </div>
+
+    <section id="pendingSec" hidden>
+      <div class="sechead"><h2>Waiting for an answer</h2></div>
+      <div class="entries" id="pendingList"></div>
+    </section>
+
+    <section>
+      <div class="sechead"><h2>Today</h2><span class="muted small mono" id="todayDate"></span></div>
+      <div class="entries" id="todayList"></div>
+    </section>
+
+    <section>
+      <div class="sechead"><h2>Last 30 days</h2></div>
+      <div class="summary" id="summary"></div>
+    </section>
+  </div>
+
+  <!-- CALENDAR -->
+  <div id="tab-cal" hidden>
+    <div class="cal">
+      <div class="calnav">
+        <button type="button" id="calPrev" aria-label="Previous month">‹</button>
+        <h2 id="calTitle"></h2>
+        <button type="button" id="calNext" aria-label="Next month">›</button>
+      </div>
+      <div class="grid7" id="calGrid"></div>
+      <div class="legend" id="calLegend"></div>
+    </div>
+    <section>
+      <div class="sechead"><h2 id="dayTitle"></h2><span class="muted small" id="dayCount"></span></div>
+      <div class="entries" id="dayList"></div>
+    </section>
+  </div>
+
+  <!-- LOG -->
+  <div id="tab-log" hidden>
+    <div class="sechead">
+      <div class="seg" id="logFilter">
+        <button type="button" data-f="all" aria-pressed="true">All</button>
+        <button type="button" data-f="call" aria-pressed="false">Calls</button>
+        <button type="button" data-f="text" aria-pressed="false">Texts</button>
+        <button type="button" data-f="in" aria-pressed="false">From them</button>
+        <button type="button" data-f="note" aria-pressed="false">Notes</button>
+      </div>
+    </div>
+    <button class="secondary" id="btnExport" type="button" style="margin-top:10px">Export or back up</button>
+    <div id="logList" style="margin-top:14px"></div>
+  </div>
+</div>
+
+<nav class="tabs" aria-label="Sections"><div class="in" role="tablist">
+  <button type="button" role="tab" data-tab="today" aria-selected="true"><svg viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg>Today</button>
+  <button type="button" role="tab" data-tab="cal" aria-selected="false"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Calendar</button>
+  <button type="button" role="tab" data-tab="log" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>Full log</button>
+</div></nav>
+
+<div class="scrim" id="scrim" hidden></div>
+<div class="sheet" id="sheet" hidden role="dialog" aria-modal="true"><div class="in" id="sheetIn"></div></div>
+<div class="toast" id="toast" hidden></div>
+
+<script src="lib/jspdf.umd.min.js"></script>
+<script src="lib/jspdf.plugin.autotable.min.js"></script>
+<script src="local-store.js"></script>
+<script>
+(function(){
+"use strict";
+// ---------- state ----------
+const DEFAULT_CFG={child:"Cass",phones:{mum:{label:"Christie",number:""},gran:{label:"May",number:""}},others:[]};
+const S={entries:[],cfg:JSON.parse(JSON.stringify(DEFAULT_CFG)),cfgLoaded:false,db:null,assets:null,downloads:null,
+  canWrite:true,lastBackup:null,backupLoaded:false,
+  dbState:"loading",tab:"today",selDay:null,month:null,logFilter:"all",activeCallId:null,hiddenAt:null};
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const pad2=n=>String(n).padStart(2,"0");
+const dayKey=d=>{d=new Date(d);return d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate())};
+const fromKey=k=>{const [y,m,d]=k.split("-").map(Number);return new Date(y,m-1,d)};
+const fmtTime=d=>new Date(d).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"});
+const fmtDay=d=>new Date(d).toLocaleDateString([], {weekday:"short",month:"short",day:"numeric"});
+const fmtDayLong=d=>new Date(d).toLocaleDateString([], {weekday:"long",month:"long",day:"numeric",year:"numeric"});
+const fmtStamp=d=>new Date(d).toLocaleString([], {month:"short",day:"numeric",year:"numeric",hour:"numeric",minute:"2-digit",second:"2-digit"});
+const tz=(()=>{try{return Intl.DateTimeFormat().resolvedOptions().timeZone}catch(e){return ""}})();
+const newId=()=>Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8);
+const nowParts=()=>{const n=new Date();return {d:dayKey(n),t:pad2(n.getHours())+":"+pad2(n.getMinutes())}};
+S.selDay=dayKey(new Date()); S.month=(()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth(),1)})();
+
+const child=()=>S.cfg.child||"Cass";
+const NOTE_CATS=[{k:"cancelled",label:"Visit cancelled"},{k:"handover",label:"Missed handover"},{k:"event",label:"Event or occasion"},{k:"other",label:"Other note"}];
+function outcomes(type,dir){
+  const c=child();
+  if(type==="note")return [];
+  if(dir==="in")return type==="call"?[
+    {k:"spoke",label:"Spoke to "+c,tone:"good"},
+    {k:"talked",label:"Talked, not to "+c,tone:"mid"},
+    {k:"missed",label:"I missed the call",tone:"miss"}]
+    :[{k:"received",label:"Text received",tone:"in"}];
+  return type==="call"?[
+    {k:"spoke",label:"Spoke to "+c,tone:"good"},
+    {k:"answered",label:"Answered, didn't speak to "+c,tone:"mid"},
+    {k:"no_answer",label:"No answer",tone:"miss"},
+    {k:"voicemail",label:"Voicemail",tone:"miss"}]
+  :[
+    {k:"yes",label:"Yes, with "+c,tone:"good"},
+    {k:"no",label:"No, not with "+c,tone:"mid"},
+    {k:"called_back",label:"Called back",tone:"good"},
+    {k:"replied",label:"Replied",tone:"in"},
+    {k:"no_reply",label:"No reply",tone:"miss"}];
+}
+const dirOf=e=>e.direction||"out";
+const outcomeOf=e=>outcomes(e.type,dirOf(e)).find(o=>o.k===e.outcome);
+const catLabel=k=>(NOTE_CATS.find(c=>c.k===k)||NOTE_CATS[3]).label;
+function contact(key){
+  if(key==="mum"||key==="gran"){const p=S.cfg.phones[key]||{};return {label:p.label||(key==="mum"?"Christie":"May"),number:(p.number||"").trim()}}
+  if(key==="cass")return {label:child(),number:""};
+  const o=(S.cfg.others||[]).find(o=>o.id===key);return o?{label:o.label,number:(o.number||"").trim()}:{label:"Someone else",number:""};
+}
+const telHref=n=>"tel:"+n.replace(/[^\d+]/g,"");
+const smsHref=n=>"sms:"+n.replace(/[^\d+]/g,"");
+const live=()=>S.entries.filter(e=>!e.voided&&!e.test);
+const isOutContact=e=>e.type!=="note"&&dirOf(e)==="out";
+
+// ---------- persistence ----------
+const chains={};
+function writeDoc(id,data){
+  const p=(chains[id]||Promise.resolve()).then(async()=>{
+    if(!S.db)return;
+    try{await S.db.collection("log").doc(id).set(data)}
+    catch(err){
+      if(err&&err.code==="unavailable"){await new Promise(r=>setTimeout(r,600+Math.random()*600));await S.db.collection("log").doc(id).set(data)}
+      else{toast(err&&err.code==="quota_exceeded"?"Your phone is out of storage for the log. Save a backup and free up space.":"Couldn't save that entry. Try again.");throw err}
+    }
+  }).catch(()=>{});
+  chains[id]=p;return p;
+}
+function upsert(entry){
+  const i=S.entries.findIndex(e=>e.id===entry.id);
+  if(i>=0)S.entries[i]=entry;else S.entries.push(entry);
+  sortEntries();render();
+  const {id,...data}=entry;return writeDoc(id,data);
+}
+function sortEntries(){S.entries.sort((a,b)=>new Date(b.at)-new Date(a.at))}
+function getEntry(id){return S.entries.find(e=>e.id===id)}
+function changeEntry(id,patch){
+  const e=getEntry(id);if(!e)return;
+  const now=new Date().toISOString();
+  const changes={};let isFirstAnswer=false;
+  for(const k of Object.keys(patch)){
+    const a=e[k],b=patch[k];
+    if(JSON.stringify(a)===JSON.stringify(b))continue;
+    if(k==="approxSec")continue;
+    if(k==="outcome"&&a==null){isFirstAnswer=true;continue}
+    if(k==="attachments"){changes[k]=["",""];continue}
+    if(k==="comment"&&!a&&!e.outcomeAt&&e.type!=="note")continue;
+    changes[k]=[a==null?"":a,b];
+  }
+  const next={...e,...patch};
+  if(isFirstAnswer)next.outcomeAt=now;
+  if(Object.keys(changes).length){next.history=[...(e.history||[]),{at:now,changes}]}
+  return upsert(next);
+}
+async function saveCfg(){
+  if(!S.db)return;
+  try{await S.db.doc("config/main").set(JSON.parse(JSON.stringify(S.cfg)))}catch(_){toast("Couldn't save phone settings")}
+}
+async function uploadFiles(files){
+  const out=[];
+  for(const f of files){
+    try{const id=await LocalStore.blobs.put(f);out.push({id,addedAt:new Date().toISOString()})}
+    catch(err){toast(err&&err.code==="too_large"?"That image is too big.":"Couldn't upload a screenshot.")}
+  }
+  return out;
+}
+
+// ---------- logging actions ----------
+function baseEntry(type,dir,who,at,backfilled){
+  const c=contact(who);const now=new Date().toISOString();
+  return {id:newId(),type,direction:dir,to:who,toLabel:c.label,toNumber:c.number,at:at||now,loggedAt:now,tz,
+    outcome:null,outcomeAt:null,comment:"",backfilled:!!backfilled,voided:false,test:!!S.cfg.testMode,attachments:[],history:[]};
+}
+const GROUP_MS=30*60000;
+function openGroupFor(e){
+  const t=new Date(e.at);
+  return S.entries.filter(x=>x.id!==e.id&&!x.voided&&x.type!=="note"&&!!x.test===!!e.test&&t-new Date(x.at)>=0&&t-new Date(x.at)<=GROUP_MS)
+    .sort((a,b)=>new Date(b.at)-new Date(a.at))[0];
+}
+function joinGroup(e,prev){
+  const gid=prev.groupId||prev.id;
+  if(!prev.groupId){const p={...prev,groupId:gid};const i=S.entries.findIndex(x=>x.id===p.id);S.entries[i]=p;const {id,...d}=p;writeDoc(id,d)}
+  e.groupId=gid;
+}
+const groupMembers=e=>e.groupId?S.entries.filter(x=>x.groupId===e.groupId&&!!x.test===!!e.test):[e];
+function logContact(type,who){
+  const e=baseEntry(type,"out",who);
+  const prev=openGroupFor(e);if(prev)joinGroup(e,prev);
+  upsert(e);return e;
+}
+
+// ---------- rendering ----------
+function render(){
+  $("hTitle").textContent="Calls to "+child();
+  $("controls").hidden=!S.canWrite;$("btnSettings").hidden=!S.canWrite;
+  renderBanners();renderPad();renderPending();renderToday();renderSummary();
+  if(S.tab==="cal")renderCal();
+  if(S.tab==="log")renderLog();
+}
+function renderBanners(){
+  const out=[];
+  if(S.dbState==="none")out.push("<b>Not saving.</b> This browser is blocking storage, so nothing you log will be kept. Open the app from your home screen icon in Safari, and turn off Private Browsing.");
+  else if(!S.canWrite)out.push("<b>View only.</b> This is a read-only copy of the contact log. You can look through it and export it, but not change it.");
+  else{
+    if(S.cfg.testMode)out.push("<b>Test mode is on.</b> New entries are marked as tests and left out of your totals and exports. Turn it off in settings when you're ready to log for real.");
+    if(S.cfgLoaded&&(!contact("mum").number||!contact("gran").number))out.push("<b>Add the phone numbers</b> for "+esc(contact("mum").label)+" and "+esc(contact("gran").label)+" so the buttons can dial and text. Tap the settings button at the top.");
+    if(S.backupLoaded&&S.dbState==="ready"&&live().length>=3){
+      const last=S.lastBackup?new Date(S.lastBackup):null;
+      if(!last||Date.now()-last>7*864e5)out.push(`<b>Time for a backup.</b> ${last?"Your last one was "+esc(fmtDay(last))+".":"You haven't saved one yet."} Save one to Files, iCloud Drive or email it to yourself, so the record is never only in this app.<br><button class="bbtn" type="button" data-backup>Save backup</button>`);
+    }
+  }
+  $("banners").innerHTML=out.map(m=>`<div class="banner">${m}</div>`).join("");
+}
+function actLink(type,who,cls){
+  const c=contact(who);const href=c.number?(type==="call"?telHref(c.number):smsHref(c.number)):"#";
+  return {href:esc(href),c};
+}
+const ICON_CALL='<svg viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg>';
+const ICON_TEXT='<svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>';
+function renderPad(){
+  const rows=["mum","gran"].map(w=>{const c=contact(w);const call=actLink("call",w).href,text=actLink("text",w).href;
+    return `<div class="crow"><div class="cn"><b>${esc(c.label)}</b>${c.number?`<span class="mono">${esc(c.number)}</span>`:`<span class="warn">No number yet</span>`}</div>
+      <div class="cbtns"><a class="cbtn call" href="${call}" data-act="call" data-who="${w}">${ICON_CALL}Call</a><a class="cbtn text" href="${text}" data-act="text" data-who="${w}" aria-label="Text ${esc(c.label)}">${ICON_TEXT}Text</a></div></div>`});
+  rows.push(`<div class="crow someone"><div class="cn"><b>Someone else</b><span>Grandad, a relative…</span></div><div class="cbtns"><button type="button" class="cbtn pick" data-otherpick>Choose</button></div></div>`);
+  $("pad").innerHTML=rows.join("");
+}
+function moreSheet(){
+  openSheet(`
+    <div class="sh"><h2>Log something else</h2>${closeBtn}</div>
+    <div class="menu">
+      <button type="button" data-menu="in"><b>They contacted me</b><span>A call or text from Christie, May, Cass or anyone else, including missed calls</span></button>
+      <button type="button" data-menu="note"><b>Add a note</b><span>A cancelled visit, missed handover or event</span></button>
+      <button type="button" data-menu="past"><b>Add a past call or text</b><span>Something you forgot to log at the time</span></button>
+    </div>`,{kind:"menu"});
+}
+function whatOf(e){
+  const who=esc(e.toLabel||contact(e.to).label);
+  if(e.type==="note")return "Note: "+esc(catLabel(e.category));
+  if(dirOf(e)==="in")return (e.replyTo?(e.type==="call"?"Called back: ":"Text reply from "):(e.type==="call"?"Call from ":"Text from "))+who;
+  return (e.type==="call"?"Called ":"Texted ")+who;
+}
+const blobURLs={};
+function thumbsHTML(e){return (e.attachments||[]).length?`<div class="thumbs">${e.attachments.map(a=>`<img alt="Screenshot" data-blob="${esc(a.id)}"${blobURLs[a.id]?` src="${blobURLs[a.id]}"`:""}>`).join("")}</div>`:""}
+async function hydrateBlobs(root){
+  for(const img of (root||document).querySelectorAll("img[data-blob]:not([src])")){
+    const id=img.dataset.blob;
+    try{if(!blobURLs[id]){const b=await LocalStore.blobs.get(id);if(!b)continue;blobURLs[id]=URL.createObjectURL(b)}img.src=blobURLs[id]}catch(_){}
+  }
+}
+new MutationObserver(()=>hydrateBlobs()).observe(document.body,{childList:true,subtree:true});
+const needsReply=e=>S.canWrite&&e.type==="text"&&dirOf(e)==="out"&&!e.voided&&(!e.outcome||e.outcome==="no_reply")&&(dayKey(e.at)===dayKey(new Date())||!e.outcome);
+function entryHTML(e,opts={}){
+  const inner=entryCore(e,opts);
+  return needsReply(e)?`<div class="ewrap">${inner}<button type="button" class="replybtn" data-reply="${esc(e.id)}">Replied</button></div>`:inner;
+}
+function entryCore(e,opts={}){
+  const o=outcomeOf(e);let pill;
+  if(e.type==="note")pill=`<span class="pill note">Note</span>`;
+  else if(o)pill=`<span class="pill ${o.tone}">${esc(o.label)}</span>`;
+  else pill=`<span class="pill pend">${e.type==="text"?"Waiting for reply":"Tap to add what happened"}</span>`;
+  const tags=[];
+  if(dirOf(e)==="in"&&e.type!=="note")tags.push('<span class="tag">they contacted you</span>');
+  if(e.backfilled)tags.push('<span class="tag">added later</span>');
+  if((e.history||[]).some(h=>Object.keys(h.changes||{}).some(k=>k!=="attachments")))tags.push('<span class="tag">edited</span>');
+  if(e.test)tags.push('<span class="tag" style="border-color:var(--pend);color:var(--pend);font-weight:700">test</span>');
+  else if(e.voided)tags.push('<span class="tag">marked as mistake</span>');
+  if(e.type==="call"&&dirOf(e)==="out"&&e.approxSec>=20)tags.push(`<span class="tag">~${Math.round(e.approxSec/60)||1} min away</span>`);
+  return `<button type="button" class="entry${e.voided?" void":""}${e.test?" test":""}" data-open="${esc(e.id)}">
+    <span class="t mono">${opts.date?esc(fmtDay(e.at))+"<br>":""}${esc(fmtTime(e.at))}</span>
+    <span class="body"><span class="what">${whatOf(e)}</span>
+      <span class="tags">${pill}${tags.join("")}</span>
+      ${e.comment?`<span class="comment">${esc(e.comment)}</span>`:""}${thumbsHTML(e)}</span></button>`;
+}
+function listHTML(list){
+  const counts={};for(const e of list)if(e.groupId)counts[e.groupId]=(counts[e.groupId]||0)+1;
+  const done=new Set();const out=[];
+  for(const e of list){
+    if(e.groupId&&counts[e.groupId]>=2){
+      if(done.has(e.groupId))continue;done.add(e.groupId);
+      const steps=list.filter(x=>x.groupId===e.groupId);
+      const real=steps.filter(x=>!x.voided);
+      const spoke=real.some(x=>x.outcome==="spoke"),pend=real.some(x=>x.type!=="note"&&!x.outcome);
+      const pill=spoke?`<span class="pill good">Spoke to ${esc(child())}</span>`:pend?`<span class="pill pend">In progress</span>`:`<span class="pill mid">Didn't reach ${esc(child())}</span>`;
+      const t0=fmtTime(steps[0].at),t1=fmtTime(steps[steps.length-1].at);const range=t0===t1?t0:t0+"–"+t1;
+      out.push(`<div class="group"><div class="ghead"><div><b>Trying to reach ${esc(child())}</b><div class="gt mono">${esc(range)} · ${steps.length} steps</div></div>${pill}</div>${steps.map(x=>entryHTML(x)).join("")}</div>`);
+    } else out.push(entryHTML(e));
+  }
+  return out.join("");
+}
+function renderPending(){
+  const cutoff=Date.now()-7*864e5;
+  const list=live().filter(e=>isOutContact(e)&&!e.outcome&&new Date(e.at)>cutoff&&dayKey(e.at)!==dayKey(new Date()));
+  $("pendingSec").hidden=!list.length;
+  $("pendingList").innerHTML=list.map(e=>entryHTML(e,{date:true})).join("");
+}
+function renderToday(){
+  $("todayDate").textContent=fmtDay(new Date());
+  const k=dayKey(new Date());
+  const list=S.entries.filter(e=>dayKey(e.at)===k).slice().reverse();
+  $("todayList").innerHTML=list.length?listHTML(list):
+    `<div class="empty">${S.dbState==="loading"?"Loading your log…":(S.canWrite?"Nothing logged yet today. Tap a button above when you call or text. The time is saved the moment you tap.":"Nothing logged today.")}</div>`;
+}
+function groupByDay(list){const m={};for(const e of list){(m[dayKey(e.at)]=m[dayKey(e.at)]||[]).push(e)}return m}
+function dayStatus(k,byDay){
+  const l=(byDay[k]||[]).filter(e=>e.type!=="note");if(!l.length)return "";
+  if(l.some(e=>e.outcome==="spoke"))return "good";
+  return l.some(isOutContact)?"mid":"";
+}
+function stats(days){
+  const byDay=groupByDay(live());
+  const today=new Date();const keys=[];
+  for(let i=days-1;i>=0;i--){const d=new Date(today.getFullYear(),today.getMonth(),today.getDate()-i);keys.push(dayKey(d))}
+  let tried=0,spoke=0,calls=0,texts=0,incoming=0;const firsts=[];
+  for(const k of keys){const l=byDay[k]||[];
+    if(l.some(e=>e.outcome==="spoke"))spoke++;
+    incoming+=l.filter(e=>e.type!=="note"&&dirOf(e)==="in").length;
+    const out=l.filter(isOutContact);if(!out.length)continue;tried++;
+    calls+=out.filter(e=>e.type==="call").length;texts+=out.filter(e=>e.type==="text").length;
+    const first=out.reduce((a,b)=>new Date(a.at)<new Date(b.at)?a:b);const d=new Date(first.at);firsts.push(d.getHours()*60+d.getMinutes());}
+  firsts.sort((a,b)=>a-b);let usual="";
+  if(firsts.length){const m=firsts[Math.floor(firsts.length/2)];const d=new Date();d.setHours(Math.floor(m/60),m%60,0,0);usual=fmtTime(d)}
+  return {keys,byDay,tried,spoke,calls,texts,incoming,usual};
+}
+function legendHTML(){return `<span class="g">Spoke to ${esc(child())}</span><span class="m">Tried, didn't speak</span><span>Nothing logged</span>`}
+function renderSummary(){
+  const s=stats(30);
+  const strip=s.keys.map(k=>`<i class="${dayStatus(k,s.byDay)}" title="${esc(fmtDay(fromKey(k)))}"></i>`).join("");
+  $("summary").innerHTML=`
+    <div class="label">Days you reached out</div>
+    <div class="big mono" style="margin-top:6px">${s.tried}<small> of 30 days</small></div>
+    <div class="strip" aria-hidden="true">${strip}</div>
+    <div class="legend">${legendHTML()}</div>
+    <div class="statrow">
+      <div class="stat"><div class="label">Spoke to ${esc(child())}</div><div class="v mono">${s.spoke} ${s.spoke===1?"day":"days"}</div></div>
+      <div class="stat"><div class="label">Your calls · texts</div><div class="v mono">${s.calls} · ${s.texts}</div></div>
+      <div class="stat"><div class="label">Usual time</div><div class="v mono">${s.usual||"—"}</div></div>
+    </div>
+    <div class="muted small" style="margin-top:10px">They contacted you ${s.incoming} ${s.incoming===1?"time":"times"} in this period.</div>`;
+}
+function renderCal(){
+  const m=S.month;const y=m.getFullYear(),mo=m.getMonth();
+  $("calTitle").textContent=m.toLocaleDateString([], {month:"long",year:"numeric"});
+  $("calLegend").innerHTML=legendHTML()+`<span class="nl">Note</span>`;
+  const byDay=groupByDay(live());
+  const startDow=new Date(y,mo,1).getDay();const nDays=new Date(y,mo+1,0).getDate();
+  const todayK=dayKey(new Date());
+  let h=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d=>`<div class="dow">${d}</div>`).join("");
+  for(let i=0;i<startDow;i++)h+=`<div class="cell out"></div>`;
+  for(let d=1;d<=nDays;d++){
+    const k=dayKey(new Date(y,mo,d));const st=dayStatus(k,byDay);const l=byDay[k]||[];
+    const n=l.filter(e=>e.type!=="note").length;const hasNote=l.some(e=>e.type==="note");
+    h+=`<button type="button" class="cell ${st}${k===todayK?" today":""}${k===S.selDay?" sel":""}" data-day="${k}" aria-label="${esc(fmtDayLong(fromKey(k)))}, ${l.length} entries">${hasNote?'<span class="nt"></span>':""}<span class="mono">${d}</span>${n?`<span class="n mono">${n}×</span>`:""}</button>`;
+  }
+  $("calGrid").innerHTML=h;
+  const list=S.entries.filter(e=>dayKey(e.at)===S.selDay).slice().reverse();
+  $("dayTitle").textContent=fmtDayLong(fromKey(S.selDay));
+  $("dayCount").textContent=list.length?list.length+(list.length===1?" entry":" entries"):"";
+  $("dayList").innerHTML=list.length?listHTML(list):`<div class="empty">Nothing logged on this day.</div>`;
+}
+function matchFilter(e,f){
+  if(f==="all")return true;
+  if(f==="note")return e.type==="note";
+  if(f==="in")return e.type!=="note"&&dirOf(e)==="in";
+  return e.type===f&&dirOf(e)==="out";
+}
+function renderLog(){
+  const f=S.logFilter;const list=S.entries.filter(e=>matchFilter(e,f));
+  if(!list.length){$("logList").innerHTML=`<div class="empty">${S.dbState==="loading"?"Loading…":"No entries here yet."}</div>`;return}
+  const by=groupByDay(list);const keys=Object.keys(by).sort().reverse();
+  $("logList").innerHTML=keys.map(k=>{const l=by[k].slice().reverse();
+    return `<div class="dayhead"><span>${esc(fmtDayLong(fromKey(k)))}</span><span class="muted small">${l.length}</span></div><div class="entries">${listHTML(l)}</div>`}).join("");
+}
+
+// ---------- sheets ----------
+let sheetCtx=null;
+function openSheet(html,ctx){sheetCtx=ctx||null;$("sheetIn").innerHTML=`<div class="grab"></div>`+html;$("sheet").hidden=false;$("scrim").hidden=false;$("sheet").scrollTop=0}
+function closeSheet(){$("sheet").hidden=true;$("scrim").hidden=true;sheetCtx=null}
+$("scrim").addEventListener("click",closeSheet);
+const closeBtn=`<button class="close" type="button" data-close aria-label="Close">×</button>`;
+function shotPicker(id,prompt){
+  return `<div class="shotbox"><span class="small">${prompt}</span><label class="shotbtn">Add screenshot<input id="${id}" type="file" accept="image/*" multiple hidden></label><span class="small muted" id="${id}-status"></span></div>`;
+}
+function whenFields(){const n=nowParts();return `<div class="row2"><div class="field"><label class="label" for="wDate">Date</label><input id="wDate" type="date" value="${n.d}" max="${n.d}"></div>
+  <div class="field"><label class="label" for="wTime">Time</label><input id="wTime" type="time" value="${n.t}"></div></div>`}
+function readWhen(){const d=$("wDate").value,t=$("wTime").value;if(!d||!t){toast("Add a date and time");return null}
+  const at=new Date(d+"T"+t);if(at>new Date(Date.now()+60000)){toast("That time is in the future");return null}return at}
+
+function entrySheet(id,{justLogged}={}){
+  const e=getEntry(id);if(!e)return;
+  const dir=dirOf(e);const opts=outcomes(e.type,dir);const ro=!S.canWrite;
+  const n=e.toNumber||contact(e.to).number;
+  let title;
+  if(justLogged)title=e.type==="call"?"How did the call go?":"Text logged";
+  else if(e.type==="note")title="Note: "+esc(catLabel(e.category));
+  else title=esc(dir==="in"?(e.type==="call"?"Call from ":"Text from "):(e.type==="call"?"Call to ":"Text to "))+esc(e.toLabel);
+  const sub=e.type==="note"?"":esc(dir==="in"?(e.type==="call"?"Call from":"Text from"):(e.type==="call"?"Called":"Texted"))+" "+esc(e.toLabel)+" · ";
+  const hist=(e.history||[]).map(h=>`<div><span class="mono">${esc(fmtStamp(h.at))}</span> · ${Object.entries(h.changes).map(([k,[a,b]])=>k==="attachments"?"screenshot added":"changed "+esc(fieldName(k,e))+": “"+esc(valName(k,a,e))+"” → “"+esc(valName(k,b,e))+"”").join("; ")}</div>`).join("");
+  const textShot=justLogged&&e.type==="text"?shotPicker("shot","Screenshot the text you just sent and add it here as proof it went out."):"";
+  openSheet(`
+    <div class="sh"><div><h2>${title}</h2><div class="muted small">${sub}<span class="mono">${esc(fmtDay(e.at))}, ${esc(fmtTime(e.at))}</span></div></div>${closeBtn}</div>
+    ${!ro&&groupMembers(e).length>=2?`<div class="groupnote"><span>${justLogged?"Added to your current entry":"Part of an entry"} with ${groupMembers(e).length-1} other ${groupMembers(e).length===2?"step":"steps"}.</span><button type="button" data-ungroup>${justLogged?"Start a new entry instead":"Make it separate"}</button></div>`:""}
+    ${justLogged&&n?`<div class="callinfo"><span>If your phone didn't open, ${e.type==="call"?"call":"text"} <span class="mono">${esc(n)}</span>, then come back here.</span><button class="copy" type="button" data-copy="${esc(n)}">Copy</button></div>`:justLogged?`<div class="callinfo"><span>Time logged. ${e.type==="call"?"Call":"Text"} ${esc(e.toLabel)} from your phone, then come back here to record what happened.</span></div>`:""}
+    ${textShot}
+    ${opts.length>1?`<div class="field"><span class="label">${dir==="in"?"What happened?":e.type==="call"?"What happened?":"Their reply"}</span>
+      <div class="choices">${opts.map(o=>`<button type="button" class="choice ${o.tone}" data-outcome="${o.k}" aria-pressed="${e.outcome===o.k}" ${ro?"disabled":""}><span class="dot"></span>${esc(o.label)}</button>`).join("")}</div></div>`:""}
+    ${e.type==="note"&&!ro?`<div class="field"><label class="label" for="nCat">Type of note</label><select id="nCat">${NOTE_CATS.map(c=>`<option value="${c.k}" ${c.k===e.category?"selected":""}>${esc(c.label)}</option>`).join("")}</select></div>`:""}
+    ${ro?(e.comment?`<div class="field"><span class="label">Comment</span><div class="comment">${esc(e.comment)}</div></div>`:""):
+      `<div class="field"><label class="label" for="cmt">${e.type==="note"?"What happened":e.type==="text"&&dirOf(e)==="out"?"What you said":"Comment"}</label>
+      <textarea id="cmt" placeholder="${e.type==="call"?"e.g. "+esc(contact("gran").label)+" said he's out with his mum":e.type==="note"?"e.g. Christie cancelled Saturday's visit by text":"What you sent, and any reply"}">${esc(e.comment||"")}</textarea></div>`}
+    ${thumbsHTML(e)}
+    ${!ro&&!textShot?shotPicker("shot",(e.attachments||[]).length?"Add another screenshot, such as a reply.":"Attach a screenshot, such as your Recents screen or the message thread."):""}
+    ${ro?"":`<button class="primary" type="button" data-save>Save</button>`}
+    ${e.type==="text"&&justLogged?`<div class="muted small">No reply yet? Just close this. It stays under “Waiting for an answer” until you mark it.</div>`:""}
+    <dl class="facts">
+      <dt>${e.type==="note"?"Date":"Contact time"}</dt><dd class="mono">${esc(fmtStamp(e.at))}</dd>
+      <dt>Logged at</dt><dd class="mono">${esc(fmtStamp(e.loggedAt))}${e.backfilled?" (added later)":""}</dd>
+      ${e.outcomeAt&&dir==="out"?`<dt>Answer recorded</dt><dd class="mono">${esc(fmtStamp(e.outcomeAt))}</dd>`:""}
+      ${n&&e.type!=="note"?`<dt>Number</dt><dd class="mono">${esc(n)}</dd>`:""}
+      ${e.type==="call"&&dir==="out"&&e.approxSec>=20?`<dt>Away from app</dt><dd class="mono">about ${Math.round(e.approxSec/60)||1} min (rough call length)</dd>`:""}
+    </dl>
+    ${hist?`<div class="hist"><span class="label">Edit history</span>${hist}</div>`:""}
+    ${e.test&&!ro&&!justLogged?`<button class="secondary" type="button" data-untest>This was real, not a test</button>`:""}
+    ${justLogged||ro?"":`<div id="voidZone">${e.voided?`<button class="secondary" type="button" data-unvoid>Restore this entry</button>`:`<button class="danger" type="button" data-voidask>Mark as a mistake</button>`}</div>`}
+  `,{kind:"entry",id,picked:e.outcome});
+}
+function fieldName(k,e){return {test:"test flag",outcome:e.type==="call"?"result":"reply",comment:"comment",voided:"status",at:"time",category:"type of note"}[k]||k}
+function valName(k,v,e){if(k==="outcome"){const o=outcomes(e.type,dirOf(e)).find(o=>o.k===v);return o?o.label:"(none)"}if(k==="voided")return v?"marked as mistake":"active";if(k==="at")return v?fmtStamp(v):"";if(k==="category")return catLabel(v);return v||"(empty)"}
+
+function settingsSheet(){
+  const c=S.cfg;
+  const others=(c.others||[]).map(o=>`<div class="orow"><span class="nm"><b>${esc(o.label)}</b><span class="mono small muted">${esc(o.number||"No number")}</span></span><button class="rm" type="button" data-rmother="${esc(o.id)}">Remove</button></div>`).join("");
+  openSheet(`
+    <div class="sh"><h2>Phones</h2>${closeBtn}</div>
+    <div class="row2"><div class="field"><label class="label" for="pLab1">Name</label><input id="pLab1" value="${esc(c.phones.mum.label)}"></div>
+      <div class="field"><label class="label" for="pNum1">Number</label><input id="pNum1" type="tel" inputmode="tel" placeholder="(555) 123-4567" value="${esc(c.phones.mum.number)}"></div></div>
+    <div class="row2"><div class="field"><label class="label" for="pLab2">Name</label><input id="pLab2" value="${esc(c.phones.gran.label)}"></div>
+      <div class="field"><label class="label" for="pNum2">Number</label><input id="pNum2" type="tel" inputmode="tel" placeholder="(555) 987-6543" value="${esc(c.phones.gran.number)}"></div></div>
+    <div class="field"><label class="label" for="pChild">Your son's name</label><input id="pChild" value="${esc(c.child)}"></div>
+    <label class="orow" style="cursor:pointer"><span class="nm"><b>Test mode</b><span class="small muted">New entries are marked as tests and left out of totals and exports.</span></span><input id="pTest" type="checkbox" style="width:24px;height:24px;flex:none" ${c.testMode?"checked":""}></label>
+    <button class="primary" type="button" data-savecfg>Save</button>
+    ${others?`<div class="field"><span class="label">Other people</span><div class="olist">${others}</div><span class="muted small">Removing someone only takes them off the quick list. Past entries keep their name.</span></div>`:""}
+    <div class="muted small">Each entry keeps the name and number it was made with, so changing these later doesn't rewrite past entries.</div>
+  `,{kind:"settings"});
+}
+function otherSheet(){
+  const recent=S.cfg.others||[];
+  openSheet(`
+    <div class="sh"><div><h2>Someone else</h2><div class="muted small">Who are you contacting to reach ${esc(child())}?</div></div>${closeBtn}</div>
+    ${recent.length?`<div class="field"><span class="label">Recent</span><div class="seg">${recent.map(o=>`<button type="button" data-pickother="${esc(o.id)}" aria-pressed="false">${esc(o.label)}</button>`).join("")}</div></div>`:""}
+    <div class="field"><label class="label" for="oName">Who</label><input id="oName" placeholder="e.g. Grandad" autocomplete="off"></div>
+    <div class="field"><label class="label" for="oNum">Number (optional)</label><input id="oNum" type="tel" inputmode="tel" placeholder="Leave blank to dial from your phone"></div>
+    <div class="row2"><a class="primary" id="oCall" href="#" data-otheract="call">Call</a><a class="secondary" id="oText" href="#" data-otheract="text">Text</a></div>
+    <div class="muted small">The time is logged when you tap. Names you use are saved under Recent for next time.</div>
+  `,{kind:"other"});
+  $("oNum").addEventListener("input",syncOther);
+}
+function syncOther(){const n=$("oNum").value.trim();$("oCall").setAttribute("href",n?telHref(n):"#");$("oText").setAttribute("href",n?smsHref(n):"#")}
+const otherId=()=>"o_"+newId().replace(/[^a-z0-9]/g,"");
+function rememberOther(label,number){
+  const all=S.cfg.others||[];
+  const found=all.find(o=>o.label.toLowerCase()===label.toLowerCase());
+  const rec={id:found?found.id:otherId(),label,number:number||(found?found.number:"")};
+  S.cfg={...S.cfg,others:[rec,...all.filter(o=>o!==found)].slice(0,8)};
+  saveCfg();return rec;
+}
+function inSheet(){
+  const c=child();
+  const people=[["mum",contact("mum").label],["gran",contact("gran").label],["cass",c+" (his own phone)"]].concat((S.cfg.others||[]).map(o=>[o.id,o.label]));
+  const kinds=[{k:"in_spoke",label:"Call: spoke to "+c,tone:"good"},{k:"in_talked",label:"Call: talked, not to "+c,tone:"mid"},{k:"in_missed",label:"Missed call",tone:"miss"},{k:"in_text",label:"Text message",tone:"in"}];
+  openSheet(`
+    <div class="sh"><div><h2>They contacted me</h2><div class="muted small">Log a call or text you received, including missed ones.</div></div>${closeBtn}</div>
+    <div class="field"><label class="label" for="iWho">From</label><select id="iWho">${people.map(([k,l])=>`<option value="${esc(k)}">${esc(l)}</option>`).join("")}<option value="__new">Someone else…</option></select>
+      <input id="iNew" placeholder="Their name" hidden aria-label="Their name"></div>
+    <div class="field"><span class="label">What was it?</span><div class="choices">${kinds.map(o=>`<button type="button" class="choice ${o.tone==="in"?"":o.tone}" data-kind="${o.k}" aria-pressed="false"><span class="dot" ${o.tone==="in"?'style="background:var(--accent)"':""}></span>${esc(o.label)}</button>`).join("")}</div></div>
+    ${whenFields()}
+    <div class="field"><label class="label" for="iCmt">Comment</label><textarea id="iCmt" placeholder="e.g. Cass called to tell me about his game"></textarea></div>
+    ${shotPicker("newShot","Add a screenshot of the call in Recents or of the message.")}
+    <button class="primary" type="button" data-savein>Save</button>
+  `,{kind:"in",files:[]});
+  $("iWho").addEventListener("change",()=>{$("iNew").hidden=$("iWho").value!=="__new"});
+}
+function replySheet(id){
+  const o=getEntry(id);if(!o)return;const c=child();
+  const kinds=[{k:"text",label:"Text reply",tone:""},{k:"call_spoke",label:"Called back: spoke to "+c,tone:"good"},{k:"call_talk",label:"Called back: didn't speak to "+c,tone:"mid"}];
+  openSheet(`
+    <div class="sh"><div><h2>${esc(o.toLabel)} replied</h2><div class="muted small">To your text at <span class="mono">${esc(fmtTime(o.at))}</span>${dayKey(o.at)!==dayKey(new Date())?", "+esc(fmtDay(o.at)):""}</div></div>${closeBtn}</div>
+    <div class="field"><span class="label">How did they reply?</span><div class="choices">${kinds.map(k=>`<button type="button" class="choice ${k.tone}" data-kind="${k.k}" aria-pressed="false"><span class="dot" ${k.tone?"":'style="background:var(--accent)"'}></span>${esc(k.label)}</button>`).join("")}</div></div>
+    <div class="field"><label class="label" for="rCmt">What they said</label><textarea id="rCmt" placeholder="e.g. Not tonight, he's at a friend's" style="min-height:72px"></textarea></div>
+    ${whenFields()}
+    ${shotPicker("newShot","Add a screenshot of the reply.")}
+    <button class="primary" type="button" data-savereply>Save reply</button>
+  `,{kind:"reply",id,files:[]});
+}
+function noteSheet(){
+  openSheet(`
+    <div class="sh"><div><h2>Add a note</h2><div class="muted small">For things that aren't calls, like a cancelled visit or an event you weren't told about.</div></div>${closeBtn}</div>
+    <div class="field"><label class="label" for="nCatNew">Type of note</label><select id="nCatNew">${NOTE_CATS.map(c=>`<option value="${c.k}">${esc(c.label)}</option>`).join("")}</select></div>
+    ${whenFields()}
+    <div class="field"><label class="label" for="nCmt">What happened</label><textarea id="nCmt" placeholder="e.g. Christie cancelled Saturday's visit by text at 9am"></textarea></div>
+    ${shotPicker("newShot","Add a screenshot, such as the message about it.")}
+    <button class="primary" type="button" data-savenote>Save note</button>
+  `,{kind:"note",files:[]});
+}
+function pastSheet(opts={}){
+  const people=[["mum",contact("mum").label],["gran",contact("gran").label]].concat((S.cfg.others||[]).map(o=>[o.id,o.label]));
+  openSheet(`
+    <div class="sh"><div><h2>${opts.groupId?"Add another step":"Add a past call or text"}</h2><div class="muted small">${opts.groupId?"This goes in the same entry as the step you just saved.":"It will be marked “added later”, with now as the logged-at time."}</div></div>${closeBtn}</div>
+    ${whenFields()}
+    <div class="row2"><div class="field"><label class="label" for="bType">Type</label><select id="bType"><option value="call">Call</option><option value="text">Text</option></select></div>
+      <div class="field"><label class="label" for="bWho">Phone</label><select id="bWho">${people.map(([k,l])=>`<option value="${esc(k)}">${esc(l)}</option>`).join("")}<option value="__new">Someone else…</option></select></div></div>
+    <div class="field" id="bOtherF" hidden><label class="label" for="bOther">Who</label><input id="bOther" placeholder="e.g. Grandad" autocomplete="off"></div>
+    <div class="field"><label class="label" for="bOut">What happened</label><select id="bOut"></select></div>
+    <div class="field"><label class="label" for="bCmt">Comment</label><textarea id="bCmt"></textarea></div>
+    ${shotPicker("newShot","Add a screenshot if you have one.")}
+    <button class="primary" type="button" data-savepast="done">Save</button>
+    <button class="secondary" type="button" data-savepast="more">Save and add another step</button>
+  `,{kind:"past",files:[],groupId:opts.groupId||null});
+  if(opts.date)$("wDate").value=opts.date;if(opts.time)$("wTime").value=opts.time;
+  if(opts.who&&[...$("bWho").options].some(o=>o.value===opts.who))$("bWho").value=opts.who;
+  const fill=()=>{$("bOut").innerHTML=outcomes($("bType").value,"out").map(o=>`<option value="${o.k}">${esc(o.label)}</option>`).join("")};
+  fill();$("bType").addEventListener("change",fill);
+  $("bWho").addEventListener("change",()=>{$("bOtherF").hidden=$("bWho").value!=="__new"});
+}
+function exportSheet(){
+  openSheet(`
+    <div class="sh"><h2>Export or back up</h2>${closeBtn}</div>
+    <div class="field"><label class="label" for="xRange">Period</label>
+      <select id="xRange"><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="180">Last 6 months</option><option value="all">Everything</option></select></div>
+    <button class="primary" type="button" data-pdf>Download PDF report</button>
+    <button class="secondary" type="button" data-csv>Download spreadsheet (CSV)</button>
+    <button class="secondary" type="button" data-backup>Save full backup</button>
+    <label class="secondary" style="text-align:center;cursor:pointer">Restore from a backup<input id="restoreFile" type="file" accept=".json,application/json" hidden></label>
+    <div class="muted small">The PDF lists every entry with its contact time, when it was logged, edits and entries added later, so the record is transparent.</div>
+  `,{kind:"export"});
+}
+
+// ---------- export ----------
+function rangeEntries(r){
+  const real=S.entries.filter(e=>!e.test);
+  if(r==="all")return real.slice().reverse();
+  const t=new Date();const start=new Date(t.getFullYear(),t.getMonth(),t.getDate()-(Number(r)-1));
+  return real.filter(e=>new Date(e.at)>=start).slice().reverse();
+}
+function typeName(e){if(e.type==="note")return "Note";return (e.type==="call"?"Call":"Text")+(dirOf(e)==="in"?" received":" made")}
+function rowOf(e){
+  const o=outcomeOf(e);
+  const notes=[];const gm=groupMembers(e).filter(x=>!x.test);if(gm.length>=2){const ord=gm.slice().sort((a,b)=>new Date(a.at)-new Date(b.at));notes.push("step "+(ord.findIndex(x=>x.id===e.id)+1)+" of "+gm.length+" in one attempt")}if(e.backfilled)notes.push("added later");if(e.history&&e.history.length)notes.push("edited "+e.history.length+"x");if(e.voided)notes.push("marked as mistake");if((e.attachments||[]).length)notes.push(e.attachments.length+" screenshot(s)");
+  const result=e.type==="note"?catLabel(e.category):(o?o.label:(e.type==="text"?"No reply marked":"Not recorded"));
+  return {date:new Date(e.at).toLocaleDateString(),time:fmtTime(e.at),type:typeName(e),phone:e.type==="note"?"":(e.toLabel||"")+(e.toNumber?" ("+e.toNumber+")":""),
+    result,comment:e.comment||"",logged:fmtStamp(e.loggedAt),answered:e.outcomeAt&&dirOf(e)==="out"?fmtStamp(e.outcomeAt):"",notes:notes.join(", ")};
+}
+const MIME={pdf:"application/pdf",csv:"text/csv",json:"application/json"};
+async function save(filename,data){
+  const type=MIME[filename.split(".").pop()]||"application/octet-stream";
+  const file=new File([data],filename,{type});
+  try{
+    if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:filename});toast("Saved");return true}
+  }catch(err){if(err&&err.name==="AbortError")return false}
+  try{const url=URL.createObjectURL(file);const a=document.createElement("a");a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);toast("Saved");return true}
+  catch(_){toast("Couldn't save the file.");return false}
+}
+const slug=()=>child().toLowerCase().replace(/[^a-z0-9]+/g,"-");
+function exportCSV(r){
+  const rows=rangeEntries(r).map(rowOf);
+  const head=["Date","Time","Type","Person / phone","Result","Comment","Logged at","Answer recorded","Notes"];
+  const q=v=>'"'+String(v).replace(/"/g,'""')+'"';
+  const csv=[head.map(q).join(",")].concat(rows.map(x=>[x.date,x.time,x.type,x.phone,x.result,x.comment,x.logged,x.answered,x.notes].map(q).join(","))).join("\r\n");
+  save(`contact-log-${slug()}-${dayKey(new Date())}.csv`,csv);
+}
+const blobToData=b=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(b)});
+async function restoreBackup(file){
+  let data;try{data=JSON.parse(await file.text())}catch(_){toast("That file isn't a backup from this app.");return}
+  if(!data||!Array.isArray(data.entries)){toast("That file isn't a backup from this app.");return}
+  let added=0,skipped=0;
+  for(const [id,url] of Object.entries(data.screenshots||{})){try{const b=await (await fetch(url)).blob();await LocalStore.blobs.put(b,id)}catch(_){}}
+  for(const e of data.entries){if(!e||!e.id)continue;if(getEntry(e.id)){skipped++;continue}const {id,...d}=e;await S.db.collection("log").doc(id).set(d);added++}
+  if(data.config&&(!contact("mum").number&&!contact("gran").number)){await S.db.doc("config/main").set(data.config)}
+  closeSheet();toast(`Restored ${added} ${added===1?"entry":"entries"}${skipped?`, ${skipped} already here`:""}`);
+}
+async function exportBackup(){
+  toast("Preparing backup…");
+  const shots={};
+  for(const e of S.entries)for(const a of (e.attachments||[])){if(shots[a.id])continue;try{const b=await LocalStore.blobs.get(a.id);if(b)shots[a.id]=await blobToData(b)}catch(_){}}
+  const ok=await save(`contact-log-backup-${dayKey(new Date())}.json`,JSON.stringify({app:"calls-to-cass",version:1,exported:new Date().toISOString(),timezone:tz,config:S.cfg,entries:S.entries,screenshots:shots}));
+  if(ok){const at=new Date().toISOString();S.lastBackup=at;render();if(S.db){try{await S.db.doc("config/backup").set({lastAt:at})}catch(_){}}}
+}
+function exportPDF(r){
+  if(!window.jspdf||!window.jspdf.jsPDF){toast("The PDF tool didn't load. Try the spreadsheet instead.");return}
+  const list=rangeEntries(r);const rows=list.map(rowOf);
+  const doc=new window.jspdf.jsPDF({unit:"pt",format:"letter"});
+  const W=doc.internal.pageSize.getWidth();
+  doc.setFont("helvetica","bold");doc.setFontSize(16);doc.text("Contact log: calls and texts to reach "+child(),40,48);
+  doc.setFont("helvetica","normal");doc.setFontSize(10);
+  const period=r==="all"?"All entries":"Last "+r+" days";
+  const first=list.length?new Date(list[0].at).toLocaleDateString():"",last=list.length?new Date(list[list.length-1].at).toLocaleDateString():"";
+  doc.text(`${period}${list.length?` (${first} to ${last})`:""}. Generated ${fmtStamp(new Date())}${tz?" ("+tz+")":""}.`,40,66);
+  const lv=list.filter(e=>!e.voided);const out=lv.filter(isOutContact);
+  const byOut=groupByDay(out);const byAll=groupByDay(lv);
+  const spoke=Object.keys(byAll).filter(k=>byAll[k].some(e=>e.outcome==="spoke")).length;
+  const span=r==="all"?(list.length?Math.round((fromKey(dayKey(new Date()))-fromKey(dayKey(list[0].at)))/864e5)+1:0):Number(r);
+  const lines=[`Days I called or texted: ${Object.keys(byOut).length} of ${span}`,`Days I spoke to ${child()}: ${spoke}`,
+    `Calls made: ${out.filter(e=>e.type==="call").length}   Texts sent: ${out.filter(e=>e.type==="text").length}   Calls/texts received: ${lv.filter(e=>e.type!=="note"&&dirOf(e)==="in").length}   Notes: ${lv.filter(e=>e.type==="note").length}`];
+  doc.setFontSize(11);lines.forEach((l,i)=>doc.text(l,40,90+i*16));
+  doc.autoTable({startY:140,head:[["Date","Time","Type","Person","Result","Comment","Logged at","Notes"]],
+    body:rows.map(x=>[x.date,x.time,x.type,x.phone,x.result,x.comment,x.logged,x.notes]),
+    styles:{fontSize:7.5,cellPadding:3,overflow:"linebreak"},headStyles:{fillColor:[47,93,138]},
+    columnStyles:{0:{cellWidth:46},1:{cellWidth:38},2:{cellWidth:42},3:{cellWidth:58},4:{cellWidth:66},5:{cellWidth:"auto"},6:{cellWidth:70},7:{cellWidth:48}},
+    margin:{left:30,right:30},
+    didDrawPage:()=>{doc.setFontSize(7.5);doc.setTextColor(110);doc.text("“Logged at” is when the entry was saved in the app. Entries “added later” were entered after the contact. Edits are kept, not overwritten.",30,doc.internal.pageSize.getHeight()-20,{maxWidth:W-60});doc.setTextColor(0)}});
+  save(`contact-log-${slug()}-${dayKey(new Date())}.pdf`,doc.output("arraybuffer"));
+}
+
+// ---------- events ----------
+const SEL="[data-act],[data-open],[data-close],[data-outcome],[data-kind],[data-save],[data-copy],[data-savecfg],[data-savepast],[data-savein],[data-savenote],[data-voidask],[data-voidyes],[data-voidno],[data-unvoid],[data-pdf],[data-csv],[data-backup],[data-tab],[data-day],[data-f],[data-untest],[data-reply],[data-savereply],[data-ungroup],[data-menu],[data-otherpick],[data-pickother],[data-otheract],[data-rmother]";
+document.addEventListener("click",async ev=>{
+  const t=ev.target.closest(SEL);
+  if(!t)return;
+  const D=t.dataset;
+  if(D.act){
+    if(!S.canWrite){ev.preventDefault();return}
+    const who=D.who,type=D.act,c=contact(who);
+    if(!c.number){
+      ev.preventDefault();
+      if(who==="mum"||who==="gran"){settingsSheet();return}
+    }
+    const e=logContact(type,who);
+    if(type==="call"&&c.number){S.activeCallId=e.id;try{localStorage.setItem("activeCall",e.id)}catch(_){}}
+    setTimeout(()=>entrySheet(e.id,{justLogged:true}),250);
+    return; // the tel:/sms: link proceeds on its own
+  }
+  if(D.open){entrySheet(D.open);return}
+  if(D.close!==undefined){closeSheet();return}
+  if(D.tab){setTab(D.tab);return}
+  if(D.day){S.selDay=D.day;renderCal();return}
+  if(D.f){S.logFilter=D.f;document.querySelectorAll("#logFilter button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.f===S.logFilter));renderLog();return}
+  if(D.ungroup!==undefined&&sheetCtx&&sheetCtx.kind==="entry"){const e=getEntry(sheetCtx.id);upsert({...e,groupId:null});entrySheet(e.id);toast("Now a separate entry");return}
+  if(D.untest!==undefined&&sheetCtx&&sheetCtx.kind==="entry"){changeEntry(sheetCtx.id,{test:false});closeSheet();toast("Now counted as a real entry");return}
+  if(D.reply){replySheet(D.reply);return}
+  if(D.savereply!==undefined&&sheetCtx&&sheetCtx.kind==="reply"){
+    const k=sheetCtx.kindPicked;if(!k){toast("Pick how they replied");return}
+    const at=readWhen();if(!at)return;
+    const o=getEntry(sheetCtx.id);if(!o)return;
+    let when=at;const nowD=new Date();
+    if(Math.floor(when/60000)===Math.floor(nowD/60000))when=nowD;
+    if(when<=new Date(o.at))when=new Date(new Date(o.at).getTime()+1000);
+    const type=k==="text"?"text":"call";
+    const e=baseEntry(type,"in",o.to,when.toISOString(),Date.now()-when>15*60000);
+    e.toLabel=o.toLabel;e.toNumber=o.toNumber||"";e.replyTo=o.id;
+    e.outcome={text:"received",call_spoke:"spoke",call_talk:"talked"}[k];e.outcomeAt=e.loggedAt;e.comment=$("rCmt").value.trim();
+    const gid=o.groupId||o.id;
+    if(!o.groupId){const i=S.entries.findIndex(x=>x.id===o.id);S.entries[i]={...o,groupId:gid}}
+    e.groupId=gid;
+    const files=sheetCtx.files;closeSheet();
+    changeEntry(o.id,{outcome:type==="call"?"called_back":"replied"});
+    if(files.length){toast("Uploading screenshot…");e.attachments=await uploadFiles(files)}
+    upsert(e);toast("Reply saved");return}
+  if(D.menu){({in:inSheet,note:noteSheet,past:pastSheet})[D.menu]();return}
+  if(D.otherpick!==undefined){if(S.canWrite)otherSheet();return}
+  if(D.pickother){const o=(S.cfg.others||[]).find(o=>o.id===D.pickother);if(o){$("oName").value=o.label;$("oNum").value=o.number||"";syncOther();
+    document.querySelectorAll("[data-pickother]").forEach(b=>b.setAttribute("aria-pressed",b===t))}return}
+  if(D.otheract){
+    const name=$("oName").value.trim(),n=$("oNum").value.trim(),type=D.otheract;
+    if(!name){ev.preventDefault();toast("Enter who you're contacting");$("oName").focus();return}
+    if(!n)ev.preventDefault();
+    const rec=rememberOther(name,n);
+    const e=logContact(type,rec.id);e.toNumber=n;
+    if(type==="call"){S.activeCallId=e.id;try{localStorage.setItem("activeCall",e.id)}catch(_){}}
+    setTimeout(()=>entrySheet(e.id,{justLogged:true}),250);
+    return}
+  if(D.rmother){S.cfg.others=(S.cfg.others||[]).filter(o=>o.id!==D.rmother);render();settingsSheet();await saveCfg();return}
+  if(D.copy){const v=D.copy;try{await navigator.clipboard.writeText(v);toast("Number copied")}catch(_){toast("Press and hold the number to copy it")}return}
+  if(D.outcome&&sheetCtx){sheetCtx.picked=D.outcome;document.querySelectorAll("[data-outcome]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.outcome===sheetCtx.picked));return}
+  if(D.kind&&sheetCtx){sheetCtx.kindPicked=D.kind;document.querySelectorAll("[data-kind]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.kind===sheetCtx.kindPicked));return}
+  if(D.save!==undefined&&sheetCtx&&sheetCtx.kind==="entry"){
+    const e=getEntry(sheetCtx.id);const patch={comment:$("cmt").value.trim()};
+    if(sheetCtx.picked)patch.outcome=sheetCtx.picked;
+    if(e.type==="note"&&$("nCat"))patch.category=$("nCat").value;
+    if(e.type==="call"&&!patch.outcome&&!e.outcome){toast("Pick what happened first");return}
+    changeEntry(sheetCtx.id,patch);
+    if(S.activeCallId===sheetCtx.id){S.activeCallId=null;try{localStorage.removeItem("activeCall")}catch(_){}}
+    closeSheet();toast("Saved");return}
+  if(D.voidask!==undefined){$("voidZone").innerHTML=`<div class="confirm">This keeps the entry in the record, crossed out, with the change noted in its history. Mark it as a mistake?<div class="row2"><button class="secondary" type="button" data-voidno>Keep it</button><button class="danger" type="button" data-voidyes>Mark as mistake</button></div></div>`;return}
+  if(D.voidno!==undefined){entrySheet(sheetCtx.id);return}
+  if(D.voidyes!==undefined){changeEntry(sheetCtx.id,{voided:true});closeSheet();toast("Marked as a mistake");return}
+  if(D.unvoid!==undefined){changeEntry(sheetCtx.id,{voided:false});closeSheet();toast("Restored");return}
+  if(D.savecfg!==undefined){
+    const ch=$("pChild").value.trim()||"Cass";
+    S.cfg={...S.cfg,testMode:$("pTest").checked,child:ch,
+      phones:{mum:{label:$("pLab1").value.trim()||"Christie",number:$("pNum1").value.trim()},gran:{label:$("pLab2").value.trim()||"May",number:$("pNum2").value.trim()}}};
+    S.cfgLoaded=true;render();closeSheet();await saveCfg();toast("Saved");return}
+  if(D.savein!==undefined){
+    const k=sheetCtx.kindPicked;if(!k){toast("Pick what it was");return}
+    const at=readWhen();if(!at)return;
+    let who=$("iWho").value;
+    if(who==="__new"){const name=$("iNew").value.trim();if(!name){toast("Add their name");return}
+      who=rememberOther(name,"").id}
+    const type=k==="in_text"?"text":"call";
+    const outcome={in_spoke:"spoke",in_talked:"talked",in_missed:"missed",in_text:"received"}[k];
+    const e=baseEntry(type,"in",who,at.toISOString(),Date.now()-at>15*60000);
+    e.outcome=outcome;e.outcomeAt=e.loggedAt;e.comment=$("iCmt").value.trim();
+    const files=sheetCtx.files;closeSheet();
+    if(files.length){toast("Uploading screenshot…");e.attachments=await uploadFiles(files)}
+    upsert(e);toast("Saved");return}
+  if(D.savenote!==undefined){
+    const at=readWhen();if(!at)return;
+    const e=baseEntry("note","out",null,at.toISOString(),false);
+    e.to=null;e.toLabel="";e.toNumber="";e.category=$("nCatNew").value;e.comment=$("nCmt").value.trim();
+    if(!e.comment){toast("Write what happened");return}
+    const files=sheetCtx.files;closeSheet();
+    if(files.length){toast("Uploading screenshot…");e.attachments=await uploadFiles(files)}
+    upsert(e);toast("Note saved");return}
+  if(D.savepast!==undefined){
+    const at=readWhen();if(!at)return;
+    let who=$("bWho").value;const type=$("bType").value;
+    if(who==="__new"){const name=$("bOther").value.trim();if(!name){toast("Enter who you contacted");return}who=rememberOther(name,"").id}
+    const e=baseEntry(type,"out",who,at.toISOString(),true);
+    e.outcome=$("bOut").value;e.outcomeAt=e.loggedAt;e.comment=$("bCmt").value.trim();
+    const more=D.savepast==="more";
+    if(sheetCtx.groupId)e.groupId=sheetCtx.groupId;else if(more)e.groupId=e.id;
+    const files=sheetCtx.files;const gid=e.groupId;closeSheet();
+    if(files.length){toast("Uploading screenshot…");e.attachments=await uploadFiles(files)}
+    upsert(e);
+    if(more){pastSheet({groupId:gid,date:dayKey(at),time:pad2(at.getHours())+":"+pad2(at.getMinutes()),who});toast("Step saved. Add the next one.")}
+    else toast("Added");
+    return}
+  if(D.pdf!==undefined){exportPDF($("xRange").value);return}
+  if(D.csv!==undefined){exportCSV($("xRange").value);return}
+  if(D.backup!==undefined){exportBackup();return}
+});
+document.addEventListener("change",async ev=>{
+  const id=ev.target.id;
+  if(id==="restoreFile"){const f=ev.target.files&&ev.target.files[0];if(f)restoreBackup(f);return}
+  if(id==="newShot"&&sheetCtx){
+    sheetCtx.files=[...(sheetCtx.files||[]),...Array.from(ev.target.files||[])];
+    const st=$("newShot-status");if(st)st.textContent=sheetCtx.files.length+(sheetCtx.files.length===1?" screenshot ready":" screenshots ready")+", saved when you tap Save.";
+    return}
+  if(id!=="shot"||!sheetCtx)return;
+  const files=Array.from(ev.target.files||[]);if(!files.length)return;
+  const keep={picked:sheetCtx.picked,cmt:$("cmt")?$("cmt").value:"",cat:$("nCat")?$("nCat").value:null};
+  const st=$("shot-status");if(st)st.textContent="Uploading…";
+  const added=await uploadFiles(files);if(!added.length){if(st)st.textContent="";return}
+  const e=getEntry(sheetCtx.id);const wasJust=!!$("sheetIn").querySelector(".callinfo")||(e.type==="text"&&!e.outcome&&!(e.attachments||[]).length);
+  await changeEntry(e.id,{attachments:[...(e.attachments||[]),...added]});
+  entrySheet(e.id,{justLogged:false});
+  sheetCtx.picked=keep.picked;if($("cmt"))$("cmt").value=keep.cmt;if(keep.cat&&$("nCat"))$("nCat").value=keep.cat;
+  document.querySelectorAll("[data-outcome]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.outcome===sheetCtx.picked));
+  toast(added.length===1?"Screenshot attached":added.length+" screenshots attached");
+});
+$("btnSettings").addEventListener("click",settingsSheet);
+$("btnMore").addEventListener("click",moreSheet);
+$("btnExport").addEventListener("click",exportSheet);
+$("calPrev").addEventListener("click",()=>{S.month=new Date(S.month.getFullYear(),S.month.getMonth()-1,1);renderCal()});
+$("calNext").addEventListener("click",()=>{S.month=new Date(S.month.getFullYear(),S.month.getMonth()+1,1);renderCal()});
+function setTab(tab){S.tab=tab;for(const k of ["today","cal","log"])$("tab-"+k).hidden=k!==tab;
+  document.querySelectorAll("nav.tabs [data-tab]").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===tab));
+  window.scrollTo(0,0);render()}
+
+// Rough call length: time away from the app after tapping Call
+document.addEventListener("visibilitychange",()=>{
+  if(!S.activeCallId){try{S.activeCallId=localStorage.getItem("activeCall")}catch(_){}}
+  if(document.hidden){if(S.activeCallId)S.hiddenAt=Date.now();return}
+  const id=S.activeCallId;if(!id||!S.hiddenAt)return;
+  const sec=Math.round((Date.now()-S.hiddenAt)/1000);S.hiddenAt=null;
+  const e=getEntry(id);if(!e)return;
+  if(e.approxSec==null&&sec>=3)changeEntry(id,{approxSec:sec});
+  if(!e.outcome&&(sheetCtx==null||sheetCtx.id!==id))entrySheet(id,{justLogged:true});
+});
+
+let toastT;function toast(m){const el=$("toast");el.textContent=m;el.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>el.hidden=true,2400)}
+
+// ---------- boot ----------
+render();
+(async()=>{
+  let db=null;
+  try{await LocalStore.ready();db=LocalStore}catch(_){}
+  if(!db){S.dbState="none";S.cfgLoaded=true;S.backupLoaded=true;render();return}
+  S.db=db;
+  try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(_){}
+  db.doc("config/main").onSnapshot(s=>{if(s.exists){const d=s.data();S.cfg={...DEFAULT_CFG,...d,phones:{...DEFAULT_CFG.phones,...(d.phones||{})},others:(Array.isArray(d.others)?d.others:[]).map((o,i)=>o&&o.id?o:{...o,id:"o_legacy"+i+"_"+String(o&&o.label||"").toLowerCase().replace(/[^a-z0-9]/g,"")})}}S.cfgLoaded=true;render()},()=>{});
+  db.doc("config/backup").onSnapshot(s=>{S.lastBackup=s.exists?(s.data().lastAt||null):null;S.backupLoaded=true;render()},()=>{});
+  db.collection("log").onSnapshot(s=>{S.entries=s.docs.map(d=>({id:d.id,...d.data()}));sortEntries();S.dbState="ready";render();
+    if(sheetCtx&&sheetCtx.kind==="entry"&&!getEntry(sheetCtx.id))closeSheet();},
+    ()=>toast("Couldn't open your log. Close the app and open it again."));
+  if("serviceWorker" in navigator&&location.protocol==="https:"){navigator.serviceWorker.register("sw.js").catch(()=>{})}
+})();
+})();
+</script>
+</body>
+</html>
