@@ -231,6 +231,13 @@ section{margin-top:28px}
 .replybtn{position:absolute;top:10px;right:10px;background:var(--accent);color:var(--accent-ink);border:0;border-radius:10px;padding:8px 12px;font-weight:700;font-size:.85rem}
 .groupnote{background:var(--bg);border-radius:12px;padding:10px 12px;font-size:.88rem;display:flex;justify-content:space-between;align-items:center;gap:10px}
 .groupnote button{flex:none;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:6px 10px;font-size:.82rem;font-weight:700}
+.filepick{position:relative;overflow:hidden}
+.filepick input[type=file]{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:0}
+.t .uk{display:block;font-size:.72rem;color:var(--muted);font-weight:400;margin-top:2px}
+.viewer{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;padding:calc(16px + env(safe-area-inset-top,0px)) 16px calc(16px + env(safe-area-inset-bottom,0px))}
+.viewer img{max-width:100%;max-height:100%;object-fit:contain;border-radius:8px}
+.viewer button{position:absolute;top:calc(12px + env(safe-area-inset-top,0px));right:16px;background:rgba(255,255,255,.15);color:#fff;border:0;border-radius:999px;width:40px;height:40px;font-size:1.4rem}
+.sheet .thumbs img{width:64px;height:64px;cursor:zoom-in}
 </style>
 </head>
 <body>
@@ -336,6 +343,13 @@ const nowParts=()=>{const n=new Date();return {d:dayKey(n),t:pad2(n.getHours())+
 S.selDay=dayKey(new Date()); S.month=(()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth(),1)})();
 
 const child=()=>S.cfg.child||"Cass";
+const ukTz=()=>S.cfg.ukTz||"Europe/London";
+const UK_LABEL=()=>({"Europe/London":"UK","Europe/Dublin":"Ireland"})[ukTz()]||ukTz().split("/").pop().replace(/_/g," ");
+const sameTz=()=>{try{return tz===ukTz()||new Date().toLocaleString("en-GB",{timeZone:tz})===new Date().toLocaleString("en-GB",{timeZone:ukTz()})}catch(_){return false}};
+const ukTime=d=>{try{return new Date(d).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",timeZone:ukTz()})}catch(_){return ""}};
+const ukDayKey=d=>{try{return new Date(d).toLocaleDateString("en-CA",{timeZone:ukTz()})}catch(_){return dayKey(d)}};
+const ukWhen=d=>{const t=ukTime(d);if(!t)return "";const diff=ukDayKey(d)!==dayKey(d);return t+(diff?" "+new Date(d).toLocaleDateString("en-GB",{weekday:"short",timeZone:ukTz()}):"")};
+const ukStamp=d=>{try{return new Date(d).toLocaleString("en-GB",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit",timeZone:ukTz()})}catch(_){return ""}};
 const NOTE_CATS=[{k:"cancelled",label:"Visit cancelled"},{k:"handover",label:"Missed handover"},{k:"event",label:"Event or occasion"},{k:"other",label:"Other note"}];
 function outcomes(type,dir){
   const c=child();
@@ -413,11 +427,27 @@ async function saveCfg(){
   if(!S.db)return;
   try{await S.db.doc("config/main").set(JSON.parse(JSON.stringify(S.cfg)))}catch(_){toast("Couldn't save phone settings")}
 }
+function toJpeg(file){
+  return new Promise(res=>{
+    const url=URL.createObjectURL(file);const img=new Image();
+    img.onload=()=>{try{
+      const max=2200,sc=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));
+      const c=document.createElement("canvas");c.width=Math.round(img.naturalWidth*sc);c.height=Math.round(img.naturalHeight*sc);
+      c.getContext("2d").drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(url);
+      c.toBlob(b=>res(b),"image/jpeg",0.85);
+    }catch(_){URL.revokeObjectURL(url);res(null)}};
+    img.onerror=()=>{URL.revokeObjectURL(url);res(null)};
+    img.src=url;
+  });
+}
 async function uploadFiles(files){
   const out=[];
   for(const f of files){
-    try{const id=await LocalStore.blobs.put(f);out.push({id,addedAt:new Date().toISOString()})}
-    catch(err){toast(err&&err.code==="too_large"?"That image is too big.":"Couldn't upload a screenshot.")}
+    try{
+      let blob=await toJpeg(f);
+      if(!blob)blob=new Blob([await f.arrayBuffer()],{type:f.type||"image/jpeg"});
+      const id=await LocalStore.blobs.put(blob);out.push({id,addedAt:new Date().toISOString()});
+    }catch(err){toast("Couldn't save that screenshot ("+((err&&err.name)||"error")+"). Try again, or free up space on your phone.")}
   }
   return out;
 }
@@ -505,6 +535,11 @@ async function hydrateBlobs(root){
   }
 }
 new MutationObserver(()=>hydrateBlobs()).observe(document.body,{childList:true,subtree:true});
+document.addEventListener("click",ev=>{
+  const img=ev.target.closest(".sheet img[data-blob]");if(!img||!img.src)return;
+  const v=document.createElement("div");v.className="viewer";v.innerHTML=`<img alt="Screenshot" src="${img.src}"><button type="button" aria-label="Close">×</button>`;
+  v.addEventListener("click",()=>v.remove());document.body.appendChild(v);
+});
 const needsReply=e=>S.canWrite&&e.type==="text"&&dirOf(e)==="out"&&!e.voided&&(!e.outcome||e.outcome==="no_reply")&&(dayKey(e.at)===dayKey(new Date())||!e.outcome);
 function entryHTML(e,opts={}){
   const inner=entryCore(e,opts);
@@ -523,7 +558,7 @@ function entryCore(e,opts={}){
   else if(e.voided)tags.push('<span class="tag">marked as mistake</span>');
   if(e.type==="call"&&dirOf(e)==="out"&&e.approxSec>=20)tags.push(`<span class="tag">~${Math.round(e.approxSec/60)||1} min away</span>`);
   return `<button type="button" class="entry${e.voided?" void":""}${e.test?" test":""}" data-open="${esc(e.id)}">
-    <span class="t mono">${opts.date?esc(fmtDay(e.at))+"<br>":""}${esc(fmtTime(e.at))}</span>
+    <span class="t mono">${opts.date?esc(fmtDay(e.at))+"<br>":""}${esc(fmtTime(e.at))}${sameTz()?"":`<span class="uk">${esc(ukWhen(e.at))} ${esc(UK_LABEL())}</span>`}</span>
     <span class="body"><span class="what">${whatOf(e)}</span>
       <span class="tags">${pill}${tags.join("")}</span>
       ${e.comment?`<span class="comment">${esc(e.comment)}</span>`:""}${thumbsHTML(e)}</span></button>`;
@@ -575,8 +610,8 @@ function stats(days){
     calls+=out.filter(e=>e.type==="call").length;texts+=out.filter(e=>e.type==="text").length;
     const first=out.reduce((a,b)=>new Date(a.at)<new Date(b.at)?a:b);const d=new Date(first.at);firsts.push(d.getHours()*60+d.getMinutes());}
   firsts.sort((a,b)=>a-b);let usual="";
-  if(firsts.length){const m=firsts[Math.floor(firsts.length/2)];const d=new Date();d.setHours(Math.floor(m/60),m%60,0,0);usual=fmtTime(d)}
-  return {keys,byDay,tried,spoke,calls,texts,incoming,usual};
+  let usualAt=null;if(firsts.length){const m=firsts[Math.floor(firsts.length/2)];const d=new Date();d.setHours(Math.floor(m/60),m%60,0,0);usual=fmtTime(d);usualAt=d}
+  return {keys,byDay,tried,spoke,calls,texts,incoming,usual,usualAt};
 }
 function legendHTML(){return `<span class="g">Spoke to ${esc(child())}</span><span class="m">Tried, didn't speak</span><span>Nothing logged</span>`}
 function renderSummary(){
@@ -590,7 +625,7 @@ function renderSummary(){
     <div class="statrow">
       <div class="stat"><div class="label">Spoke to ${esc(child())}</div><div class="v mono">${s.spoke} ${s.spoke===1?"day":"days"}</div></div>
       <div class="stat"><div class="label">Your calls · texts</div><div class="v mono">${s.calls} · ${s.texts}</div></div>
-      <div class="stat"><div class="label">Usual time</div><div class="v mono">${s.usual||"—"}</div></div>
+      <div class="stat"><div class="label">Usual time</div><div class="v mono">${s.usual||"—"}</div>${s.usualAt&&!sameTz()?`<div class="small muted mono">${esc(ukTime(s.usualAt))} ${esc(UK_LABEL())}</div>`:""}</div>
     </div>
     <div class="muted small" style="margin-top:10px">They contacted you ${s.incoming} ${s.incoming===1?"time":"times"} in this period.</div>`;
 }
@@ -635,7 +670,7 @@ function closeSheet(){$("sheet").hidden=true;$("scrim").hidden=true;sheetCtx=nul
 $("scrim").addEventListener("click",closeSheet);
 const closeBtn=`<button class="close" type="button" data-close aria-label="Close">×</button>`;
 function shotPicker(id,prompt){
-  return `<div class="shotbox"><span class="small">${prompt}</span><label class="shotbtn">Add screenshot<input id="${id}" type="file" accept="image/*" multiple hidden></label><span class="small muted" id="${id}-status"></span></div>`;
+  return `<div class="shotbox"><span class="small">${prompt}</span><label class="shotbtn filepick">Add screenshot<input id="${id}" type="file" accept="image/*" multiple></label><span class="small muted" id="${id}-status"></span></div>`;
 }
 function whenFields(){const n=nowParts();return `<div class="row2"><div class="field"><label class="label" for="wDate">Date</label><input id="wDate" type="date" value="${n.d}" max="${n.d}"></div>
   <div class="field"><label class="label" for="wTime">Time</label><input id="wTime" type="time" value="${n.t}"></div></div>`}
@@ -670,6 +705,7 @@ function entrySheet(id,{justLogged}={}){
     ${e.type==="text"&&justLogged?`<div class="muted small">No reply yet? Just close this. It stays under “Waiting for an answer” until you mark it.</div>`:""}
     <dl class="facts">
       <dt>${e.type==="note"?"Date":"Contact time"}</dt><dd class="mono">${esc(fmtStamp(e.at))}</dd>
+      ${sameTz()?"":`<dt>${esc(UK_LABEL())} time</dt><dd class="mono">${esc(ukStamp(e.at))}</dd>`}
       <dt>Logged at</dt><dd class="mono">${esc(fmtStamp(e.loggedAt))}${e.backfilled?" (added later)":""}</dd>
       ${e.outcomeAt&&dir==="out"?`<dt>Answer recorded</dt><dd class="mono">${esc(fmtStamp(e.outcomeAt))}</dd>`:""}
       ${n&&e.type!=="note"?`<dt>Number</dt><dd class="mono">${esc(n)}</dd>`:""}
@@ -692,7 +728,9 @@ function settingsSheet(){
       <div class="field"><label class="label" for="pNum1">Number</label><input id="pNum1" type="tel" inputmode="tel" placeholder="(555) 123-4567" value="${esc(c.phones.mum.number)}"></div></div>
     <div class="row2"><div class="field"><label class="label" for="pLab2">Name</label><input id="pLab2" value="${esc(c.phones.gran.label)}"></div>
       <div class="field"><label class="label" for="pNum2">Number</label><input id="pNum2" type="tel" inputmode="tel" placeholder="(555) 987-6543" value="${esc(c.phones.gran.number)}"></div></div>
-    <div class="field"><label class="label" for="pChild">Your son's name</label><input id="pChild" value="${esc(c.child)}"></div>
+    <div class="row2"><div class="field"><label class="label" for="pChild">Your son's name</label><input id="pChild" value="${esc(c.child)}"></div>
+      <div class="field"><label class="label" for="pUkTz">His time zone</label><select id="pUkTz">${[["Europe/London","UK"],["Europe/Dublin","Ireland"],["America/New_York","US Eastern"],["America/Chicago","US Central"],["America/Denver","US Mountain"],["America/Los_Angeles","US Pacific"]].map(([v,l])=>`<option value="${v}" ${v===(c.ukTz||"Europe/London")?"selected":""}>${l}</option>`).join("")}</select></div></div>
+    <div class="muted small">Your phone's time zone: ${esc(tz||"unknown")}. Each entry shows your time and his.</div>
     <label class="orow" style="cursor:pointer"><span class="nm"><b>Test mode</b><span class="small muted">New entries are marked as tests and left out of totals and exports.</span></span><input id="pTest" type="checkbox" style="width:24px;height:24px;flex:none" ${c.testMode?"checked":""}></label>
     <button class="primary" type="button" data-savecfg>Save</button>
     ${others?`<div class="field"><span class="label">Other people</span><div class="olist">${others}</div><span class="muted small">Removing someone only takes them off the quick list. Past entries keep their name.</span></div>`:""}
@@ -786,7 +824,7 @@ function exportSheet(){
     <button class="primary" type="button" data-pdf>Download PDF report</button>
     <button class="secondary" type="button" data-csv>Download spreadsheet (CSV)</button>
     <button class="secondary" type="button" data-backup>Save full backup</button>
-    <label class="secondary" style="text-align:center;cursor:pointer">Restore from a backup<input id="restoreFile" type="file" accept=".json,application/json" hidden></label>
+    <label class="secondary filepick" style="text-align:center;cursor:pointer">Restore from a backup<input id="restoreFile" type="file" accept=".json,application/json"></label>
     <div class="muted small">The PDF lists every entry with its contact time, when it was logged, edits and entries added later, so the record is transparent.</div>
   `,{kind:"export"});
 }
@@ -801,9 +839,9 @@ function rangeEntries(r){
 function typeName(e){if(e.type==="note")return "Note";return (e.type==="call"?"Call":"Text")+(dirOf(e)==="in"?" received":" made")}
 function rowOf(e){
   const o=outcomeOf(e);
-  const notes=[];const gm=groupMembers(e).filter(x=>!x.test);if(gm.length>=2){const ord=gm.slice().sort((a,b)=>new Date(a.at)-new Date(b.at));notes.push("step "+(ord.findIndex(x=>x.id===e.id)+1)+" of "+gm.length+" in one attempt")}if(e.backfilled)notes.push("added later");if(e.history&&e.history.length)notes.push("edited "+e.history.length+"x");if(e.voided)notes.push("marked as mistake");if((e.attachments||[]).length)notes.push(e.attachments.length+" screenshot(s)");
+  const notes=[];const gm=groupMembers(e).filter(x=>!x.test);if(gm.length>=2){const ord=gm.slice().sort((a,b)=>new Date(a.at)-new Date(b.at));notes.push("step "+(ord.findIndex(x=>x.id===e.id)+1)+" of "+gm.length+" in one attempt")}if(e.backfilled)notes.push("added later");{const ed=(e.history||[]).filter(h=>Object.keys(h.changes||{}).some(k=>k!=="attachments")).length;if(ed)notes.push("edited "+ed+"x")}if(e.voided)notes.push("marked as mistake");if((e.attachments||[]).length)notes.push(e.attachments.length+" screenshot(s)");
   const result=e.type==="note"?catLabel(e.category):(o?o.label:(e.type==="text"?"No reply marked":"Not recorded"));
-  return {date:new Date(e.at).toLocaleDateString(),time:fmtTime(e.at),type:typeName(e),phone:e.type==="note"?"":(e.toLabel||"")+(e.toNumber?" ("+e.toNumber+")":""),
+  return {date:new Date(e.at).toLocaleDateString(),time:fmtTime(e.at),uk:ukStamp(e.at),type:typeName(e),phone:e.type==="note"?"":(e.toLabel||"")+(e.toNumber?" ("+e.toNumber+")":""),
     result,comment:e.comment||"",logged:fmtStamp(e.loggedAt),answered:e.outcomeAt&&dirOf(e)==="out"?fmtStamp(e.outcomeAt):"",notes:notes.join(", ")};
 }
 const MIME={pdf:"application/pdf",csv:"text/csv",json:"application/json"};
@@ -819,9 +857,9 @@ async function save(filename,data){
 const slug=()=>child().toLowerCase().replace(/[^a-z0-9]+/g,"-");
 function exportCSV(r){
   const rows=rangeEntries(r).map(rowOf);
-  const head=["Date","Time","Type","Person / phone","Result","Comment","Logged at","Answer recorded","Notes"];
+  const head=["Date","Time (mine, "+tz+")",UK_LABEL()+" time ("+ukTz()+")","Type","Person / phone","Result","Comment","Logged at","Answer recorded","Notes"];
   const q=v=>'"'+String(v).replace(/"/g,'""')+'"';
-  const csv=[head.map(q).join(",")].concat(rows.map(x=>[x.date,x.time,x.type,x.phone,x.result,x.comment,x.logged,x.answered,x.notes].map(q).join(","))).join("\r\n");
+  const csv=[head.map(q).join(",")].concat(rows.map(x=>[x.date,x.time,x.uk,x.type,x.phone,x.result,x.comment,x.logged,x.answered,x.notes].map(q).join(","))).join("\r\n");
   save(`contact-log-${slug()}-${dayKey(new Date())}.csv`,csv);
 }
 const blobToData=b=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(b)});
@@ -850,7 +888,7 @@ function exportPDF(r){
   doc.setFont("helvetica","normal");doc.setFontSize(10);
   const period=r==="all"?"All entries":"Last "+r+" days";
   const first=list.length?new Date(list[0].at).toLocaleDateString():"",last=list.length?new Date(list[list.length-1].at).toLocaleDateString():"";
-  doc.text(`${period}${list.length?` (${first} to ${last})`:""}. Generated ${fmtStamp(new Date())}${tz?" ("+tz+")":""}.`,40,66);
+  doc.text(`${period}${list.length?` (${first} to ${last})`:""}. Generated ${fmtStamp(new Date())}${tz?" ("+tz+")":""}. Times shown in my time zone (${tz}) and ${UK_LABEL()} time (${ukTz()}).`,40,66);
   const lv=list.filter(e=>!e.voided);const out=lv.filter(isOutContact);
   const byOut=groupByDay(out);const byAll=groupByDay(lv);
   const spoke=Object.keys(byAll).filter(k=>byAll[k].some(e=>e.outcome==="spoke")).length;
@@ -858,10 +896,10 @@ function exportPDF(r){
   const lines=[`Days I called or texted: ${Object.keys(byOut).length} of ${span}`,`Days I spoke to ${child()}: ${spoke}`,
     `Calls made: ${out.filter(e=>e.type==="call").length}   Texts sent: ${out.filter(e=>e.type==="text").length}   Calls/texts received: ${lv.filter(e=>e.type!=="note"&&dirOf(e)==="in").length}   Notes: ${lv.filter(e=>e.type==="note").length}`];
   doc.setFontSize(11);lines.forEach((l,i)=>doc.text(l,40,90+i*16));
-  doc.autoTable({startY:140,head:[["Date","Time","Type","Person","Result","Comment","Logged at","Notes"]],
-    body:rows.map(x=>[x.date,x.time,x.type,x.phone,x.result,x.comment,x.logged,x.notes]),
+  doc.autoTable({startY:140,head:[["Date","My time",UK_LABEL()+" time","Type","Person","Result","Comment","Logged at","Notes"]],
+    body:rows.map(x=>[x.date,x.time,x.uk,x.type,x.phone,x.result,x.comment,x.logged,x.notes]),
     styles:{fontSize:7.5,cellPadding:3,overflow:"linebreak"},headStyles:{fillColor:[47,93,138]},
-    columnStyles:{0:{cellWidth:46},1:{cellWidth:38},2:{cellWidth:42},3:{cellWidth:58},4:{cellWidth:66},5:{cellWidth:"auto"},6:{cellWidth:70},7:{cellWidth:48}},
+    columnStyles:{0:{cellWidth:44},1:{cellWidth:36},2:{cellWidth:52},3:{cellWidth:38},4:{cellWidth:52},5:{cellWidth:58},6:{cellWidth:"auto"},7:{cellWidth:62},8:{cellWidth:44}},
     margin:{left:30,right:30},
     didDrawPage:()=>{doc.setFontSize(7.5);doc.setTextColor(110);doc.text("“Logged at” is when the entry was saved in the app. Entries “added later” were entered after the contact. Edits are kept, not overwritten.",30,doc.internal.pageSize.getHeight()-20,{maxWidth:W-60});doc.setTextColor(0)}});
   save(`contact-log-${slug()}-${dayKey(new Date())}.pdf`,doc.output("arraybuffer"));
@@ -909,7 +947,7 @@ document.addEventListener("click",async ev=>{
     e.groupId=gid;
     const files=sheetCtx.files;closeSheet();
     changeEntry(o.id,{outcome:type==="call"?"called_back":"replied"});
-    if(files.length){toast("Uploading screenshot…");e.attachments=await uploadFiles(files)}
+    if(files.length){toast("Saving screenshot…");e.attachments=await uploadFiles(files)}
     upsert(e);toast("Reply saved");return}
   if(D.menu){({in:inSheet,note:noteSheet,past:pastSheet})[D.menu]();return}
   if(D.otherpick!==undefined){if(S.canWrite)otherSheet();return}
@@ -942,7 +980,7 @@ document.addEventListener("click",async ev=>{
   if(D.unvoid!==undefined){changeEntry(sheetCtx.id,{voided:false});closeSheet();toast("Restored");return}
   if(D.savecfg!==undefined){
     const ch=$("pChild").value.trim()||"Cass";
-    S.cfg={...S.cfg,testMode:$("pTest").checked,child:ch,
+    S.cfg={...S.cfg,testMode:$("pTest").checked,ukTz:$("pUkTz").value,child:ch,
       phones:{mum:{label:$("pLab1").value.trim()||"Christie",number:$("pNum1").value.trim()},gran:{label:$("pLab2").value.trim()||"May",number:$("pNum2").value.trim()}}};
     S.cfgLoaded=true;render();closeSheet();await saveCfg();toast("Saved");return}
   if(D.savein!==undefined){
@@ -956,7 +994,7 @@ document.addEventListener("click",async ev=>{
     const e=baseEntry(type,"in",who,at.toISOString(),Date.now()-at>15*60000);
     e.outcome=outcome;e.outcomeAt=e.loggedAt;e.comment=$("iCmt").value.trim();
     const files=sheetCtx.files;closeSheet();
-    if(files.length){toast("Uploading screenshot…");e.attachments=await uploadFiles(files)}
+    if(files.length){toast("Saving screenshot…");e.attachments=await uploadFiles(files)}
     upsert(e);toast("Saved");return}
   if(D.savenote!==undefined){
     const at=readWhen();if(!at)return;
@@ -964,7 +1002,7 @@ document.addEventListener("click",async ev=>{
     e.to=null;e.toLabel="";e.toNumber="";e.category=$("nCatNew").value;e.comment=$("nCmt").value.trim();
     if(!e.comment){toast("Write what happened");return}
     const files=sheetCtx.files;closeSheet();
-    if(files.length){toast("Uploading screenshot…");e.attachments=await uploadFiles(files)}
+    if(files.length){toast("Saving screenshot…");e.attachments=await uploadFiles(files)}
     upsert(e);toast("Note saved");return}
   if(D.savepast!==undefined){
     const at=readWhen();if(!at)return;
@@ -975,7 +1013,7 @@ document.addEventListener("click",async ev=>{
     const more=D.savepast==="more";
     if(sheetCtx.groupId)e.groupId=sheetCtx.groupId;else if(more)e.groupId=e.id;
     const files=sheetCtx.files;const gid=e.groupId;closeSheet();
-    if(files.length){toast("Uploading screenshot…");e.attachments=await uploadFiles(files)}
+    if(files.length){toast("Saving screenshot…");e.attachments=await uploadFiles(files)}
     upsert(e);
     if(more){pastSheet({groupId:gid,date:dayKey(at),time:pad2(at.getHours())+":"+pad2(at.getMinutes()),who});toast("Step saved. Add the next one.")}
     else toast("Added");
@@ -994,7 +1032,7 @@ document.addEventListener("change",async ev=>{
   if(id!=="shot"||!sheetCtx)return;
   const files=Array.from(ev.target.files||[]);if(!files.length)return;
   const keep={picked:sheetCtx.picked,cmt:$("cmt")?$("cmt").value:"",cat:$("nCat")?$("nCat").value:null};
-  const st=$("shot-status");if(st)st.textContent="Uploading…";
+  const st=$("shot-status");if(st)st.textContent="Saving screenshot…";
   const added=await uploadFiles(files);if(!added.length){if(st)st.textContent="";return}
   const e=getEntry(sheetCtx.id);const wasJust=!!$("sheetIn").querySelector(".callinfo")||(e.type==="text"&&!e.outcome&&!(e.attachments||[]).length);
   await changeEntry(e.id,{attachments:[...(e.attachments||[]),...added]});
