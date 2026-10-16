@@ -238,6 +238,10 @@ section{margin-top:28px}
 .viewer img{max-width:100%;max-height:100%;object-fit:contain;border-radius:8px}
 .viewer button{position:absolute;top:calc(12px + env(safe-area-inset-top,0px));right:16px;background:rgba(255,255,255,.15);color:#fff;border:0;border-radius:999px;width:40px;height:40px;font-size:1.4rem}
 .sheet .thumbs img{width:64px;height:64px;cursor:zoom-in}
+.shotbox.has{background:var(--good-soft)}
+.choice.in .dot{background:var(--accent)}
+.shotok{color:var(--good);font-weight:700}
+.shotbox .thumbs img{width:72px;height:72px}
 </style>
 </head>
 <body>
@@ -669,8 +673,10 @@ function openSheet(html,ctx){sheetCtx=ctx||null;$("sheetIn").innerHTML=`<div cla
 function closeSheet(){$("sheet").hidden=true;$("scrim").hidden=true;sheetCtx=null}
 $("scrim").addEventListener("click",closeSheet);
 const closeBtn=`<button class="close" type="button" data-close aria-label="Close">×</button>`;
-function shotPicker(id,prompt){
-  return `<div class="shotbox"><span class="small">${prompt}</span><label class="shotbtn filepick">Add screenshot<input id="${id}" type="file" accept="image/*" multiple></label><span class="small muted" id="${id}-status"></span></div>`;
+function shotPicker(id,prompt,e){
+  const n=e?(e.attachments||[]).length:0;
+  const saved=n?`<div class="shotok">✓ ${n} screenshot${n===1?"":"s"} saved to this entry</div>${thumbsHTML(e)}`:"";
+  return `<div class="shotbox${n?" has":""}" id="${id}-box">${saved}<span class="small">${n?"Tap a screenshot to see it full size.":prompt}</span><div class="thumbs" id="${id}-prev"></div><label class="shotbtn filepick">${n?"Add another screenshot":"Add screenshot"}<input id="${id}" type="file" accept="image/*" multiple></label><span class="small" id="${id}-status" role="status"></span></div>`;
 }
 function whenFields(){const n=nowParts();return `<div class="row2"><div class="field"><label class="label" for="wDate">Date</label><input id="wDate" type="date" value="${n.d}" max="${n.d}"></div>
   <div class="field"><label class="label" for="wTime">Time</label><input id="wTime" type="time" value="${n.t}"></div></div>`}
@@ -687,7 +693,7 @@ function entrySheet(id,{justLogged}={}){
   else title=esc(dir==="in"?(e.type==="call"?"Call from ":"Text from "):(e.type==="call"?"Call to ":"Text to "))+esc(e.toLabel);
   const sub=e.type==="note"?"":esc(dir==="in"?(e.type==="call"?"Call from":"Text from"):(e.type==="call"?"Called":"Texted"))+" "+esc(e.toLabel)+" · ";
   const hist=(e.history||[]).map(h=>`<div><span class="mono">${esc(fmtStamp(h.at))}</span> · ${Object.entries(h.changes).map(([k,[a,b]])=>k==="attachments"?"screenshot added":"changed "+esc(fieldName(k,e))+": “"+esc(valName(k,a,e))+"” → “"+esc(valName(k,b,e))+"”").join("; ")}</div>`).join("");
-  const textShot=justLogged&&e.type==="text"?shotPicker("shot","Screenshot the text you just sent and add it here as proof it went out."):"";
+  const textShot=justLogged&&e.type==="text"?shotPicker("shot","Screenshot the text you just sent and add it here as proof it went out.",e):"";
   openSheet(`
     <div class="sh"><div><h2>${title}</h2><div class="muted small">${sub}<span class="mono">${esc(fmtDay(e.at))}, ${esc(fmtTime(e.at))}</span></div></div>${closeBtn}</div>
     ${!ro&&groupMembers(e).length>=2?`<div class="groupnote"><span>${justLogged?"Added to your current entry":"Part of an entry"} with ${groupMembers(e).length-1} other ${groupMembers(e).length===2?"step":"steps"}.</span><button type="button" data-ungroup>${justLogged?"Start a new entry instead":"Make it separate"}</button></div>`:""}
@@ -699,8 +705,8 @@ function entrySheet(id,{justLogged}={}){
     ${ro?(e.comment?`<div class="field"><span class="label">Comment</span><div class="comment">${esc(e.comment)}</div></div>`:""):
       `<div class="field"><label class="label" for="cmt">${e.type==="note"?"What happened":e.type==="text"&&dirOf(e)==="out"?"What you said":"Comment"}</label>
       <textarea id="cmt" placeholder="${e.type==="call"?"e.g. "+esc(contact("gran").label)+" said he's out with his mum":e.type==="note"?"e.g. Christie cancelled Saturday's visit by text":"What you sent, and any reply"}">${esc(e.comment||"")}</textarea></div>`}
-    ${thumbsHTML(e)}
-    ${!ro&&!textShot?shotPicker("shot",(e.attachments||[]).length?"Add another screenshot, such as a reply.":"Attach a screenshot, such as your Recents screen or the message thread."):""}
+    ${ro?thumbsHTML(e):""}
+    ${!ro&&!textShot?shotPicker("shot","Attach a screenshot, such as your Recents screen or the message thread.",e):""}
     ${ro?"":`<button class="primary" type="button" data-save>Save</button>`}
     ${e.type==="text"&&justLogged?`<div class="muted small">No reply yet? Just close this. It stays under “Waiting for an answer” until you mark it.</div>`:""}
     <dl class="facts">
@@ -1027,13 +1033,18 @@ document.addEventListener("change",async ev=>{
   if(id==="restoreFile"){const f=ev.target.files&&ev.target.files[0];if(f)restoreBackup(f);return}
   if(id==="newShot"&&sheetCtx){
     sheetCtx.files=[...(sheetCtx.files||[]),...Array.from(ev.target.files||[])];
-    const st=$("newShot-status");if(st)st.textContent=sheetCtx.files.length+(sheetCtx.files.length===1?" screenshot ready":" screenshots ready")+", saved when you tap Save.";
+    const n=sheetCtx.files.length;
+    const prev=$("newShot-prev");if(prev)prev.innerHTML=sheetCtx.files.map(f=>`<img alt="Screenshot" src="${URL.createObjectURL(f)}">`).join("");
+    const box=$("newShot-box");if(box)box.classList.add("has");
+    const st=$("newShot-status");if(st){st.className="small shotok";st.textContent=`✓ ${n} screenshot${n===1?"":"s"} added. ${n===1?"It's":"They're"} saved with the entry when you tap Save.`}
+    ev.target.value="";
     return}
   if(id!=="shot"||!sheetCtx)return;
   const files=Array.from(ev.target.files||[]);if(!files.length)return;
   const keep={picked:sheetCtx.picked,cmt:$("cmt")?$("cmt").value:"",cat:$("nCat")?$("nCat").value:null};
-  const st=$("shot-status");if(st)st.textContent="Saving screenshot…";
-  const added=await uploadFiles(files);if(!added.length){if(st)st.textContent="";return}
+  const st=$("shot-status");if(st){st.className="small";st.textContent="Saving screenshot…"}
+  const prev=$("shot-prev");if(prev)prev.innerHTML=files.map(f=>`<img alt="Screenshot" src="${URL.createObjectURL(f)}" style="opacity:.5">`).join("");
+  const added=await uploadFiles(files);if(!added.length){if(st){st.className="small";st.style.color="var(--miss)";st.textContent="That screenshot didn't save. Try again."}if(prev)prev.innerHTML="";return}
   const e=getEntry(sheetCtx.id);const wasJust=!!$("sheetIn").querySelector(".callinfo")||(e.type==="text"&&!e.outcome&&!(e.attachments||[]).length);
   await changeEntry(e.id,{attachments:[...(e.attachments||[]),...added]});
   entrySheet(e.id,{justLogged:false});
