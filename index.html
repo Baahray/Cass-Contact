@@ -360,6 +360,7 @@ button.ghead{width:100%;border:0;text-align:left;font:inherit;color:inherit;curs
 (function(){
 "use strict";
 // ---------- state ----------
+const APP_VERSION="7";
 const DEFAULT_CFG={child:"Cass",phones:{mum:{label:"Christie",number:""},gran:{label:"May",number:""}},others:[]};
 const S={open:new Set(),days:{},entries:[],cfg:JSON.parse(JSON.stringify(DEFAULT_CFG)),cfgLoaded:false,db:null,assets:null,downloads:null,
   canWrite:true,lastBackup:null,backupLoaded:false,
@@ -805,6 +806,7 @@ function settingsSheet(){
       <div class="field"><label class="label" for="pNum2">Number</label><input id="pNum2" type="tel" inputmode="tel" placeholder="(555) 987-6543" value="${esc(c.phones.gran.number)}"></div></div>
     <div class="row2"><div class="field"><label class="label" for="pChild">Your son's name</label><input id="pChild" value="${esc(c.child)}"></div>
       <div class="field"><label class="label" for="pUkTz">His time zone</label><select id="pUkTz">${[["Europe/London","UK"],["Europe/Dublin","Ireland"],["America/New_York","US Eastern"],["America/Chicago","US Central"],["America/Denver","US Mountain"],["America/Los_Angeles","US Pacific"]].map(([v,l])=>`<option value="${v}" ${v===(c.ukTz||"Europe/London")?"selected":""}>${l}</option>`).join("")}</select></div></div>
+    <div class="muted small">App version ${APP_VERSION}</div>
     <div class="muted small">Your phone's time zone: ${esc(tz||"unknown")}. Each entry shows your time and his.</div>
     <label class="orow" style="cursor:pointer"><span class="nm"><b>Open in WhatsApp</b><span class="small muted">Call and Text buttons open the WhatsApp chat instead of your phone and Messages.</span></span><input id="pWA" type="checkbox" style="width:24px;height:24px;flex:none" ${c.whatsapp!==false?"checked":""}></label>
     <div class="field"><label class="label" for="pCC">Country code for numbers starting with 0</label><input id="pCC" inputmode="numeric" value="${esc(c.cc||"44")}" placeholder="44"><span class="small muted">44 is the UK. A number like 07700 900123 is opened in WhatsApp as +44 7700 900123.</span></div>
@@ -1283,7 +1285,14 @@ render();
   db.collection("log").onSnapshot(s=>{S.entries=s.docs.map(d=>({id:d.id,...d.data()}));sortEntries();S.dbState="ready";render();
     if(sheetCtx&&sheetCtx.kind==="entry"&&!getEntry(sheetCtx.id))closeSheet();},
     ()=>toast("Couldn't open your log. Close the app and open it again."));
-  if("serviceWorker" in navigator&&location.protocol==="https:"){navigator.serviceWorker.register("sw.js").catch(()=>{})}
+  if("serviceWorker" in navigator&&location.protocol==="https:"){
+    navigator.serviceWorker.register("sw.js",{updateViaCache:"none"}).then(reg=>{
+      const check=()=>reg.update().catch(()=>{});
+      document.addEventListener("visibilitychange",()=>{if(!document.hidden)check()});check();
+    }).catch(()=>{});
+    let reloaded=false;
+    navigator.serviceWorker.addEventListener("controllerchange",()=>{if(reloaded||sheetCtx)return;reloaded=true;location.reload()});
+  }
 })();
 })();
 </script>
