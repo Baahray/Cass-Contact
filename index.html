@@ -272,6 +272,16 @@ button.ghead{width:100%;border:0;text-align:left;font:inherit;color:inherit;curs
 .group:not(.open)>.ghead{border-bottom:0}
 .ghead .gr{display:flex;align-items:center;gap:8px;flex:none}
 @media (prefers-reduced-motion: reduce){.chev{transition:none}}
+.erow.full{grid-template-columns:58px 1fr;cursor:pointer}
+.erow.full .ebody .line2{gap:6px}
+.daydrop{background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.ddhead{width:100%;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:14px;background:none;border:0;text-align:left;font:inherit;color:inherit;cursor:pointer}
+.ddt{display:flex;flex-direction:column;gap:2px;min-width:0}
+.ddt b{font-size:1rem}
+.ddhead .gr{display:flex;align-items:center;gap:8px;flex:none}
+.daydrop.open>.ddhead .chev{transform:rotate(180deg)}
+.daydrop.open>.ddhead{border-bottom:1px solid var(--line)}
+.ddbody{padding:10px;background:var(--bg)}
 </style>
 </head>
 <body>
@@ -339,7 +349,7 @@ button.ghead{width:100%;border:0;text-align:left;font:inherit;color:inherit;curs
       </div>
     </div>
     <button class="secondary" id="btnExport" type="button" style="margin-top:10px">Export or back up</button>
-    <div id="logList" style="margin-top:14px"></div>
+    <div id="logList" style="margin-top:14px;display:flex;flex-direction:column;gap:10px"></div>
   </div>
 </div>
 
@@ -360,7 +370,7 @@ button.ghead{width:100%;border:0;text-align:left;font:inherit;color:inherit;curs
 (function(){
 "use strict";
 // ---------- state ----------
-const APP_VERSION="7";
+const APP_VERSION="8";
 const DEFAULT_CFG={child:"Cass",phones:{mum:{label:"Christie",number:""},gran:{label:"May",number:""}},others:[]};
 const S={open:new Set(),days:{},entries:[],cfg:JSON.parse(JSON.stringify(DEFAULT_CFG)),cfgLoaded:false,db:null,assets:null,downloads:null,
   canWrite:true,lastBackup:null,backupLoaded:false,
@@ -607,17 +617,12 @@ function entryCore(e,opts={}){
   if(e.test)tags.push('<span class="tag" style="border-color:var(--pend);color:var(--pend);font-weight:700">test</span>');
   else if(e.voided)tags.push('<span class="tag">marked as mistake</span>');
   if(e.type==="call"&&dirOf(e)==="out"&&e.approxSec>=20)tags.push(`<span class="tag">~${Math.round(e.approxSec/60)||1} min away</span>`);
-  const open=S.open.has(e.id);const nShots=(e.attachments||[]).length;
-  const hints=[];if(e.comment)hints.push("note");if(nShots)hints.push(nShots+" screenshot"+(nShots===1?"":"s"));
-  return `<div class="entry${e.voided?" void":""}${e.test?" test":""}${open?" open":""}">
-    <button type="button" class="erow" data-toggle="${esc(e.id)}" aria-expanded="${open}">
+  return `<div class="entry${e.voided?" void":""}${e.test?" test":""}">
+    <button type="button" class="erow full" data-open="${esc(e.id)}">
       <span class="t mono">${opts.date?esc(fmtDay(e.at))+"<br>":""}${esc(fmtTime(e.at))}${sameTz()?"":`<span class="uk">${esc(ukWhen(e.at))} ${esc(UK_LABEL())}</span>`}</span>
-      <span class="ebody"><span class="what">${whatOf(e)}</span><span class="line2">${pill}${!open&&hints.length?`<span class="hint">+ ${hints.join(", ")}</span>`:""}</span></span>
-      ${CHEV}
+      <span class="ebody"><span class="what">${whatOf(e)}</span><span class="line2">${pill}${tags.join("")}</span>
+        ${e.comment?`<span class="comment">${esc(e.comment)}</span>`:""}${thumbsHTML(e)}</span>
     </button>
-    ${open?`<div class="edetail">${tags.length?`<div class="tags">${tags.join("")}</div>`:""}
-      ${e.comment?`<div class="comment">${esc(e.comment)}</div>`:""}${thumbsHTML(e)}
-      <button type="button" class="opener" data-open="${esc(e.id)}">${S.canWrite?"Open to edit or add a screenshot":"Open full details"}</button></div>`:""}
   </div>`;
 }
 function listHTML(list){
@@ -633,11 +638,25 @@ function listHTML(list){
       const t0=fmtTime(steps[0].at),t1=fmtTime(steps[steps.length-1].at);const range=t0===t1?t0:t0+"–"+t1;
       const nc=steps.filter(x=>x.type==="call"&&!x.replyTo&&dirOf(x)==="out").length,nt=steps.filter(x=>x.type==="text"&&dirOf(x)==="out").length,nr=steps.filter(x=>x.replyTo).length,ni=steps.filter(x=>dirOf(x)==="in"&&!x.replyTo&&x.type!=="note").length;
       const parts=[];if(nc)parts.push(nc+" call"+(nc===1?"":"s"));if(nt)parts.push(nt+" text"+(nt===1?"":"s"));if(nr)parts.push(nr+" repl"+(nr===1?"y":"ies"));if(ni)parts.push(ni+" from them");
-      const key="g:"+e.groupId;const open=S.open.has(key);
-      out.push(`<div class="group${open?" open":""}"><button type="button" class="ghead" data-toggle="${esc(key)}" aria-expanded="${open}"><div><b>Trying to reach ${esc(child())}</b><div class="gt"><span class="mono">${esc(range)}</span><br>${esc(parts.join(" · ")||steps.length+" steps")}</div></div><span class="gr">${pill}${CHEV}</span></button>${open?steps.map(x=>entryHTML(x)).join(""):""}</div>`);
+      out.push(`<div class="group open"><div class="ghead"><div><b>Trying to reach ${esc(child())}</b><div class="gt"><span class="mono">${esc(range)}</span> · ${esc(parts.join(" · ")||steps.length+" steps")}</div></div><span class="gr">${pill}</span></div>${steps.map(x=>entryHTML(x)).join("")}</div>`);
     } else out.push(entryHTML(e));
   }
   return out.join("");
+}
+function countParts(list){
+  const l=list.filter(x=>!x.voided&&!x.test);
+  const nc=l.filter(x=>x.type==="call"&&dirOf(x)==="out").length,nt=l.filter(x=>x.type==="text"&&dirOf(x)==="out").length,nr=l.filter(x=>x.replyTo).length,ni=l.filter(x=>dirOf(x)==="in"&&!x.replyTo&&x.type!=="note").length,nn=l.filter(x=>x.type==="note").length;
+  const p=[];if(nc)p.push(nc+" call"+(nc===1?"":"s"));if(nt)p.push(nt+" text"+(nt===1?"":"s"));if(nr)p.push(nr+" repl"+(nr===1?"y":"ies"));if(ni)p.push(ni+" from them");if(nn)p.push(nn+" note"+(nn===1?"":"s"));
+  return p.join(" · ");
+}
+function dayDrop(k,list,title){
+  const key="d:"+k;const open=S.open.has(key);
+  const real=list.filter(x=>!x.voided&&!x.test);const spoke=real.some(x=>x.outcome==="spoke");const tried=real.some(isOutContact);
+  const pill=spoke?`<span class="pill good">Spoke to ${esc(child())}</span>`:tried?`<span class="pill mid">Didn't reach ${esc(child())}</span>`:"";
+  return `<div class="daydrop${open?" open":""}"><button type="button" class="ddhead" data-toggle="${esc(key)}" aria-expanded="${open}">
+    <div class="ddt"><b>${esc(title)}</b><span class="small muted">${list.length} event${list.length===1?"":"s"}${countParts(list)?" · "+esc(countParts(list)):""}</span></div>
+    <span class="gr">${pill}${CHEV}</span></button>
+    ${open?`<div class="entries ddbody">${listHTML(list)}</div>`:""}</div>`;
 }
 document.addEventListener("click",ev=>{
   const t=ev.target.closest("[data-toggle]");if(!t)return;
@@ -653,7 +672,7 @@ function renderToday(){
   $("todayDate").textContent=fmtDay(new Date());
   const k=dayKey(new Date());
   const list=S.entries.filter(e=>dayKey(e.at)===k).slice().reverse();
-  $("todayList").innerHTML=list.length?listHTML(list):
+  $("todayList").innerHTML=list.length?dayDrop(k,list,"Today's events"):
     `<div class="empty">${S.dbState==="loading"?"Loading your log…":(S.canWrite?"Nothing logged yet today. Tap a button above when you call or text. The time is saved the moment you tap.":"Nothing logged today.")}</div>`;
   $("todayShots").innerHTML=dayShotsHTML(k);
 }
@@ -733,7 +752,7 @@ function renderLog(){
   if(!list.length){$("logList").innerHTML=`<div class="empty">${S.dbState==="loading"?"Loading…":"No entries here yet."}</div>`;return}
   const by=groupByDay(list);const keys=Object.keys(by).sort().reverse();
   $("logList").innerHTML=keys.map(k=>{const l=by[k].slice().reverse();
-    return `<div class="dayhead"><span>${esc(fmtDayLong(fromKey(k)))}</span><span class="muted small">${l.length}</span></div><div class="entries">${listHTML(l)}</div>`}).join("");
+    return dayDrop(k,l,fmtDayLong(fromKey(k)))}).join("");
 }
 
 // ---------- sheets ----------
