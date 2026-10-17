@@ -257,6 +257,21 @@ section{margin-top:28px}
 .dayshots .shotbtn{padding:10px}
 .viewer .vdel{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));top:auto;right:auto;width:auto;height:auto;border-radius:12px;padding:10px 16px;font-size:.95rem;font-weight:700;background:rgba(255,255,255,.15)}
 .tag.wa{border-color:#25a244;color:#1d8a39}
+/* collapsible log rows */
+.entry{display:block;padding:0;overflow:hidden}
+.erow{display:grid;grid-template-columns:58px 1fr 20px;gap:10px;align-items:start;width:100%;background:none;border:0;padding:12px;text-align:left;color:inherit;font:inherit;cursor:pointer}
+.ebody{display:flex;flex-direction:column;gap:5px;min-width:0}
+.ebody .line2{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.ebody .hint{font-size:.78rem;color:var(--muted)}
+.chev{width:20px;height:20px;margin-top:2px;stroke:var(--muted);fill:none;stroke-width:2;transition:transform .15s}
+.entry.open .chev,.group.open>.ghead .chev{transform:rotate(180deg)}
+.edetail{padding:0 12px 12px 80px;display:flex;flex-direction:column;gap:8px}
+.edetail .opener{align-self:flex-start;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-weight:700;font-size:.85rem;color:var(--ink)}
+.ewrap .erow{padding-right:104px}
+button.ghead{width:100%;border:0;text-align:left;font:inherit;color:inherit;cursor:pointer}
+.group:not(.open)>.ghead{border-bottom:0}
+.ghead .gr{display:flex;align-items:center;gap:8px;flex:none}
+@media (prefers-reduced-motion: reduce){.chev{transition:none}}
 </style>
 </head>
 <body>
@@ -346,7 +361,7 @@ section{margin-top:28px}
 "use strict";
 // ---------- state ----------
 const DEFAULT_CFG={child:"Cass",phones:{mum:{label:"Christie",number:""},gran:{label:"May",number:""}},others:[]};
-const S={days:{},entries:[],cfg:JSON.parse(JSON.stringify(DEFAULT_CFG)),cfgLoaded:false,db:null,assets:null,downloads:null,
+const S={open:new Set(),days:{},entries:[],cfg:JSON.parse(JSON.stringify(DEFAULT_CFG)),cfgLoaded:false,db:null,assets:null,downloads:null,
   canWrite:true,lastBackup:null,backupLoaded:false,
   dbState:"loading",tab:"today",selDay:null,month:null,logFilter:"all",activeCallId:null,hiddenAt:null};
 const $=id=>document.getElementById(id);
@@ -576,12 +591,13 @@ function entryHTML(e,opts={}){
   const inner=entryCore(e,opts);
   return needsReply(e)?`<div class="ewrap">${inner}<button type="button" class="replybtn" data-reply="${esc(e.id)}">Replied</button></div>`:inner;
 }
+const CHEV='<svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
 function entryCore(e,opts={}){
   const o=outcomeOf(e);let pill;
   if(e.type==="note")pill=`<span class="pill note">Note</span>`;
   else if(e.replyTo&&e.type==="text")pill=`<span class="pill in">Reply</span>`;
   else if(o)pill=`<span class="pill ${o.tone}">${esc(o.label)}</span>`;
-  else pill=`<span class="pill pend">${e.type==="text"?"Waiting for reply":"Tap to add what happened"}</span>`;
+  else pill=`<span class="pill pend">${e.type==="text"?"Waiting for reply":"Add what happened"}</span>`;
   const tags=[];
   if(dirOf(e)==="in"&&e.type!=="note")tags.push(e.replyTo?`<span class="tag">${e.type==="call"?"called back after your text":"reply to your text"}</span>`:'<span class="tag">they contacted you</span>');
   if(e.via==="whatsapp"&&dirOf(e)==="out")tags.push('<span class="tag wa">WhatsApp</span>');
@@ -590,11 +606,18 @@ function entryCore(e,opts={}){
   if(e.test)tags.push('<span class="tag" style="border-color:var(--pend);color:var(--pend);font-weight:700">test</span>');
   else if(e.voided)tags.push('<span class="tag">marked as mistake</span>');
   if(e.type==="call"&&dirOf(e)==="out"&&e.approxSec>=20)tags.push(`<span class="tag">~${Math.round(e.approxSec/60)||1} min away</span>`);
-  return `<button type="button" class="entry${e.voided?" void":""}${e.test?" test":""}" data-open="${esc(e.id)}">
-    <span class="t mono">${opts.date?esc(fmtDay(e.at))+"<br>":""}${esc(fmtTime(e.at))}${sameTz()?"":`<span class="uk">${esc(ukWhen(e.at))} ${esc(UK_LABEL())}</span>`}</span>
-    <span class="body"><span class="what">${whatOf(e)}</span>
-      <span class="tags">${pill}${tags.join("")}</span>
-      ${e.comment?`<span class="comment">${esc(e.comment)}</span>`:""}${thumbsHTML(e)}</span></button>`;
+  const open=S.open.has(e.id);const nShots=(e.attachments||[]).length;
+  const hints=[];if(e.comment)hints.push("note");if(nShots)hints.push(nShots+" screenshot"+(nShots===1?"":"s"));
+  return `<div class="entry${e.voided?" void":""}${e.test?" test":""}${open?" open":""}">
+    <button type="button" class="erow" data-toggle="${esc(e.id)}" aria-expanded="${open}">
+      <span class="t mono">${opts.date?esc(fmtDay(e.at))+"<br>":""}${esc(fmtTime(e.at))}${sameTz()?"":`<span class="uk">${esc(ukWhen(e.at))} ${esc(UK_LABEL())}</span>`}</span>
+      <span class="ebody"><span class="what">${whatOf(e)}</span><span class="line2">${pill}${!open&&hints.length?`<span class="hint">+ ${hints.join(", ")}</span>`:""}</span></span>
+      ${CHEV}
+    </button>
+    ${open?`<div class="edetail">${tags.length?`<div class="tags">${tags.join("")}</div>`:""}
+      ${e.comment?`<div class="comment">${esc(e.comment)}</div>`:""}${thumbsHTML(e)}
+      <button type="button" class="opener" data-open="${esc(e.id)}">${S.canWrite?"Open to edit or add a screenshot":"Open full details"}</button></div>`:""}
+  </div>`;
 }
 function listHTML(list){
   const counts={};for(const e of list)if(e.groupId)counts[e.groupId]=(counts[e.groupId]||0)+1;
@@ -607,11 +630,18 @@ function listHTML(list){
       const spoke=real.some(x=>x.outcome==="spoke"),pend=real.some(x=>x.type!=="note"&&!x.outcome);
       const pill=spoke?`<span class="pill good">Spoke to ${esc(child())}</span>`:pend?`<span class="pill pend">In progress</span>`:`<span class="pill mid">Didn't reach ${esc(child())}</span>`;
       const t0=fmtTime(steps[0].at),t1=fmtTime(steps[steps.length-1].at);const range=t0===t1?t0:t0+"–"+t1;
-      out.push(`<div class="group"><div class="ghead"><div><b>Trying to reach ${esc(child())}</b><div class="gt mono">${esc(range)} · ${steps.length} steps</div></div>${pill}</div>${steps.map(x=>entryHTML(x)).join("")}</div>`);
+      const nc=steps.filter(x=>x.type==="call"&&!x.replyTo&&dirOf(x)==="out").length,nt=steps.filter(x=>x.type==="text"&&dirOf(x)==="out").length,nr=steps.filter(x=>x.replyTo).length,ni=steps.filter(x=>dirOf(x)==="in"&&!x.replyTo&&x.type!=="note").length;
+      const parts=[];if(nc)parts.push(nc+" call"+(nc===1?"":"s"));if(nt)parts.push(nt+" text"+(nt===1?"":"s"));if(nr)parts.push(nr+" repl"+(nr===1?"y":"ies"));if(ni)parts.push(ni+" from them");
+      const key="g:"+e.groupId;const open=S.open.has(key);
+      out.push(`<div class="group${open?" open":""}"><button type="button" class="ghead" data-toggle="${esc(key)}" aria-expanded="${open}"><div><b>Trying to reach ${esc(child())}</b><div class="gt"><span class="mono">${esc(range)}</span><br>${esc(parts.join(" · ")||steps.length+" steps")}</div></div><span class="gr">${pill}${CHEV}</span></button>${open?steps.map(x=>entryHTML(x)).join(""):""}</div>`);
     } else out.push(entryHTML(e));
   }
   return out.join("");
 }
+document.addEventListener("click",ev=>{
+  const t=ev.target.closest("[data-toggle]");if(!t)return;
+  const k=t.dataset.toggle;if(S.open.has(k))S.open.delete(k);else S.open.add(k);render();
+});
 function renderPending(){
   const cutoff=Date.now()-7*864e5;
   const list=live().filter(e=>isOutContact(e)&&!e.outcome&&new Date(e.at)>cutoff&&dayKey(e.at)!==dayKey(new Date()));
