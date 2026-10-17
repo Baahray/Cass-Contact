@@ -103,7 +103,7 @@ section{margin-top:22px}
 .entry .what{font-weight:700}
 .entry .comment{color:var(--ink);font-size:.93rem;overflow-wrap:anywhere;white-space:pre-wrap}
 .tags{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-.pill{display:inline-block;font-size:.78rem;font-weight:700;padding:3px 9px;border-radius:999px}
+.pill{display:inline-block;font-size:.78rem;font-weight:700;padding:3px 9px;border-radius:999px;white-space:nowrap}
 .pill.good{background:var(--good-soft);color:var(--good)}
 .pill.mid{background:var(--mid-soft);color:var(--mid)}
 .pill.miss{background:var(--miss-soft);color:var(--miss)}
@@ -227,8 +227,7 @@ section{margin-top:28px}
 .group>*+*{border-top:1px solid var(--line)}
 .group>.ghead+*{border-top:0}
 .ewrap{position:relative}
-.ewrap .entry{padding-right:104px}
-.replybtn{position:absolute;top:10px;right:10px;background:var(--accent);color:var(--accent-ink);border:0;border-radius:10px;padding:8px 12px;font-weight:700;font-size:.85rem}
+.replybtn{background:var(--accent);color:var(--accent-ink);border:0;border-radius:10px;padding:8px 12px;font-weight:700;font-size:.85rem}
 .groupnote{background:var(--bg);border-radius:12px;padding:10px 12px;font-size:.88rem;display:flex;justify-content:space-between;align-items:center;gap:10px}
 .groupnote button{flex:none;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:6px 10px;font-size:.82rem;font-weight:700}
 .filepick{position:relative;overflow:hidden}
@@ -267,7 +266,6 @@ section{margin-top:28px}
 .entry.open .chev,.group.open>.ghead .chev{transform:rotate(180deg)}
 .edetail{padding:0 12px 12px 80px;display:flex;flex-direction:column;gap:8px}
 .edetail .opener{align-self:flex-start;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-weight:700;font-size:.85rem;color:var(--ink)}
-.ewrap .erow{padding-right:104px}
 button.ghead{width:100%;border:0;text-align:left;font:inherit;color:inherit;cursor:pointer}
 .group:not(.open)>.ghead{border-bottom:0}
 .ghead .gr{display:flex;align-items:center;gap:8px;flex:none}
@@ -282,6 +280,9 @@ button.ghead{width:100%;border:0;text-align:left;font:inherit;color:inherit;curs
 .daydrop.open>.ddhead .chev{transform:rotate(180deg)}
 .daydrop.open>.ddhead{border-bottom:1px solid var(--line)}
 .ddbody{padding:10px;background:var(--bg)}
+.eactions{padding:0 12px 12px calc(12px + 58px + 10px)}
+.tag{white-space:nowrap}
+.erow .t{min-width:0}
 </style>
 </head>
 <body>
@@ -370,7 +371,7 @@ button.ghead{width:100%;border:0;text-align:left;font:inherit;color:inherit;curs
 (function(){
 "use strict";
 // ---------- state ----------
-const APP_VERSION="8";
+const APP_VERSION="9";
 const DEFAULT_CFG={child:"Cass",phones:{mum:{label:"Christie",number:""},gran:{label:"May",number:""}},others:[]};
 const S={open:new Set(),days:{},entries:[],cfg:JSON.parse(JSON.stringify(DEFAULT_CFG)),cfgLoaded:false,db:null,assets:null,downloads:null,
   canWrite:true,lastBackup:null,backupLoaded:false,
@@ -600,7 +601,8 @@ document.addEventListener("click",ev=>{
 const needsReply=e=>S.canWrite&&e.type==="text"&&dirOf(e)==="out"&&!e.voided&&(!e.outcome||e.outcome==="no_reply")&&(dayKey(e.at)===dayKey(new Date())||!e.outcome);
 function entryHTML(e,opts={}){
   const inner=entryCore(e,opts);
-  return needsReply(e)?`<div class="ewrap">${inner}<button type="button" class="replybtn" data-reply="${esc(e.id)}">Replied</button></div>`:inner;
+  if(!needsReply(e))return inner;
+  return inner.replace(/<\/div>\s*$/,`<div class="eactions"><button type="button" class="replybtn" data-reply="${esc(e.id)}">They replied</button></div></div>`);
 }
 const CHEV='<svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
 function entryCore(e,opts={}){
