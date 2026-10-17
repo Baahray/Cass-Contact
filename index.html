@@ -283,6 +283,15 @@ button.ghead{width:100%;border:0;text-align:left;font:inherit;color:inherit;curs
 .eactions{padding:0 12px 12px calc(12px + 58px + 10px)}
 .tag{white-space:nowrap}
 .erow .t{min-width:0}
+.thread{display:flex;flex-direction:column;gap:6px;margin-top:2px}
+.bub{position:relative;display:block;max-width:85%;padding:8px 11px;border-radius:14px;font-size:.92rem;white-space:pre-wrap;overflow-wrap:anywhere}
+.bub.me{align-self:flex-end;background:var(--accent-soft);border-bottom-right-radius:4px}
+.bub.them{align-self:flex-start;background:var(--bg);border:1px solid var(--line);border-bottom-left-radius:4px}
+.bub .bw{display:block;font-size:.72rem;color:var(--muted);font-weight:700;margin-bottom:2px}
+.bub .bdel{position:absolute;top:-8px;right:-8px;width:24px;height:24px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--muted);font-size:.9rem;line-height:1;padding:0}
+.bub .bdel.sure{width:auto;padding:0 8px;color:var(--miss);border-color:var(--miss);font-size:.75rem;font-weight:700}
+.sheet .thread{gap:10px}
+.thform{display:flex;flex-direction:column;gap:8px;background:var(--bg);border-radius:12px;padding:12px}
 </style>
 </head>
 <body>
@@ -371,7 +380,7 @@ button.ghead{width:100%;border:0;text-align:left;font:inherit;color:inherit;curs
 (function(){
 "use strict";
 // ---------- state ----------
-const APP_VERSION="10";
+const APP_VERSION="11";
 const DEFAULT_CFG={child:"Cass",phones:{mum:{label:"Christie",number:""},gran:{label:"May",number:""}},others:[]};
 const S={open:new Set(),days:{},entries:[],cfg:JSON.parse(JSON.stringify(DEFAULT_CFG)),cfgLoaded:false,db:null,assets:null,downloads:null,
   canWrite:true,lastBackup:null,backupLoaded:false,
@@ -464,7 +473,7 @@ function changeEntry(id,patch){
     if(JSON.stringify(a)===JSON.stringify(b))continue;
     if(k==="approxSec"||k==="to"||k==="toNumber"||k==="groupId")continue;
     if(k==="outcome"&&a==null){isFirstAnswer=true;continue}
-    if(k==="attachments"){changes[k]=["",""];continue}
+    if(k==="attachments"||k==="thread"){changes[k]=["",""];continue}
     if(k==="comment"&&!a&&!e.outcomeAt&&e.type!=="note")continue;
     changes[k]=[a==null?"":a,b];
   }
@@ -603,6 +612,10 @@ function entryHTML(e,opts={}){
   const inner=entryCore(e,opts);
   return inner;
 }
+function threadHTML(e,editable){
+  const th=e.thread||[];if(!th.length)return "";
+  return `<span class="thread">${th.map(m=>`<span class="bub ${m.from==="me"?"me":"them"}"><span class="bw">${m.from==="me"?"Me":esc(e.toLabel||"Them")}${m.at?` · ${esc(fmtTime(m.at))}${sameTz()?"":" ("+esc(ukTime(m.at))+" "+esc(UK_LABEL())+")"}`:""}</span>${esc(m.text)}${editable?`<button type="button" class="bdel" data-thdel="${esc(m.id)}" aria-label="Remove message">×</button>`:""}</span>`).join("")}</span>`;
+}
 const CHEV='<svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
 function entryCore(e,opts={}){
   const o=outcomeOf(e);let pill;
@@ -614,7 +627,7 @@ function entryCore(e,opts={}){
   if(dirOf(e)==="in"&&e.type!=="note")tags.push(e.replyTo?`<span class="tag">${e.type==="call"?"called back after your text":"reply to your text"}</span>`:'<span class="tag">they contacted you</span>');
   if(e.via==="whatsapp"&&dirOf(e)==="out")tags.push('<span class="tag wa">WhatsApp</span>');
   if(e.backfilled)tags.push('<span class="tag">added later</span>');
-  if((e.history||[]).some(h=>Object.keys(h.changes||{}).some(k=>k!=="attachments")))tags.push('<span class="tag">edited</span>');
+  if((e.history||[]).some(h=>Object.keys(h.changes||{}).some(k=>k!=="attachments"&&k!=="thread")))tags.push('<span class="tag">edited</span>');
   if(e.test)tags.push('<span class="tag" style="border-color:var(--pend);color:var(--pend);font-weight:700">test</span>');
   else if(e.voided)tags.push('<span class="tag">marked as mistake</span>');
   if(e.type==="call"&&dirOf(e)==="out"&&e.approxSec>=20)tags.push(`<span class="tag">~${Math.round(e.approxSec/60)||1} min away</span>`);
@@ -622,7 +635,7 @@ function entryCore(e,opts={}){
     <button type="button" class="erow full" data-open="${esc(e.id)}">
       <span class="t mono">${opts.date?esc(fmtDay(e.at))+"<br>":""}${esc(fmtTime(e.at))}${sameTz()?"":`<span class="uk">${esc(ukWhen(e.at))} ${esc(UK_LABEL())}</span>`}</span>
       <span class="ebody"><span class="what">${whatOf(e)}</span><span class="line2">${pill}${tags.join("")}</span>
-        ${e.comment?`<span class="comment">${esc(e.comment)}</span>`:""}${thumbsHTML(e)}</span>
+        ${e.comment?`<span class="comment">${esc(e.comment)}</span>`:""}${threadHTML(e)}${thumbsHTML(e)}</span>
     </button>
   </div>`;
 }
@@ -781,7 +794,7 @@ function entrySheet(id,{justLogged}={}){
   else if(e.type==="note")title="Note: "+esc(catLabel(e.category));
   else title=esc(dir==="in"?(e.type==="call"?"Call from ":"Text from "):(e.type==="call"?"Call to ":"Text to "))+esc(e.toLabel);
   const sub=e.type==="note"?"":esc(dir==="in"?(e.type==="call"?"Call from":"Text from"):(e.type==="call"?"Called":"Texted"))+" "+esc(e.toLabel)+" · ";
-  const hist=(e.history||[]).map(h=>`<div><span class="mono">${esc(fmtStamp(h.at))}</span> · ${Object.entries(h.changes).map(([k,[a,b]])=>k==="attachments"?"screenshot added":"changed "+esc(fieldName(k,e))+": “"+esc(valName(k,a,e))+"” → “"+esc(valName(k,b,e))+"”").join("; ")}</div>`).join("");
+  const hist=(e.history||[]).map(h=>`<div><span class="mono">${esc(fmtStamp(h.at))}</span> · ${Object.entries(h.changes).map(([k,[a,b]])=>k==="attachments"?"screenshot added":k==="thread"?"conversation updated":"changed "+esc(fieldName(k,e))+": “"+esc(valName(k,a,e))+"” → “"+esc(valName(k,b,e))+"”").join("; ")}</div>`).join("");
   const textShot=justLogged&&e.type==="text"?shotPicker("shot","Screenshot the text you just sent and add it here as proof it went out.",e):"";
   openSheet(`
     <div class="sh"><div><h2>${title}</h2><div class="muted small">${sub}<span class="mono">${esc(fmtDay(e.at))}, ${esc(fmtTime(e.at))}</span></div></div>${closeBtn}</div>
@@ -794,6 +807,9 @@ function entrySheet(id,{justLogged}={}){
     ${ro?(e.comment?`<div class="field"><span class="label">Comment</span><div class="comment">${esc(e.comment)}</div></div>`:""):
       `<div class="field"><label class="label" for="cmt">${e.type==="note"?"What happened":e.type==="text"&&dirOf(e)==="out"?"What you said":"Comment"}</label>
       <textarea id="cmt" placeholder="${e.type==="call"?"e.g. "+esc(contact("gran").label)+" said he's out with his mum":e.type==="note"?"e.g. Christie cancelled Saturday's visit by text":"What you sent, and any reply"}">${esc(e.comment||"")}</textarea></div>`}
+    ${e.type==="text"?`<div class="field"><span class="label">Conversation</span>
+      ${threadHTML(e,!ro)||`<span class="small muted">${ro?"No messages added.":"Add each message in the back-and-forth, in order."}</span>`}
+      ${ro?"":`<div id="thAdd"></div><div class="row2"><button class="secondary" type="button" data-thadd="me">+ My reply</button><button class="secondary" type="button" data-thadd="them">+ Their reply</button></div>`}</div>`:""}
     ${ro?thumbsHTML(e):""}
     ${!ro&&!textShot?shotPicker("shot","Attach a screenshot, such as your Recents screen or the message thread.",e):""}
     ${ro?"":`<button class="primary" type="button" data-save>Save</button>`}
@@ -943,12 +959,8 @@ async function savePast(){
     const e=baseEntry(r.type,"out",who,at.toISOString(),true);
     if(r.type==="call"){e.outcome=r.result;e.outcomeAt=e.loggedAt;e.comment=r.notes.trim()}
     else{e.comment=r.said.trim();if(r.replied==="yes"){e.outcome="replied";e.outcomeAt=e.loggedAt}else if(r.replied==="no"){e.outcome="no_reply";e.outcomeAt=e.loggedAt}}
+    if(r.type==="text"&&r.replied==="yes"&&r.reply.trim())e.thread=[{id:newId(),from:"them",text:r.reply.trim(),at:null,addedAt:e.loggedAt}];
     out.push(e);
-    if(r.type==="text"&&r.replied==="yes"){
-      const x=baseEntry("text","in",who,new Date(at.getTime()+1000).toISOString(),true);
-      x.toLabel=e.toLabel;x.toNumber=e.toNumber;x.replyTo=e.id;x.outcome="received";x.outcomeAt=x.loggedAt;x.comment=r.reply.trim();
-      out.push(x);
-    }
   }
   for(const e of out){const k=dayKey(e.at);(groups[k]=groups[k]||[]).push(e)}
   for(const list of Object.values(groups)){if(list.length>1){const gid=list[0].id;list.forEach(e=>e.groupId=gid)}}
@@ -982,7 +994,7 @@ function editSheet(id){
     ${isNote?"":`<div class="pseg"><button type="button" data-etype="call" aria-pressed="${e.type==="call"}">Call</button><button type="button" data-etype="text" aria-pressed="${e.type==="text"}">Text</button></div>
     <div class="field"><span class="label">What happened</span><div class="pseg" id="eRes"></div></div>`}
     <div class="field"><label class="label" for="eCmt" id="eCmtLabel">${isNote?"What happened":"Comment"}</label><textarea id="eCmt">${esc(e.comment||"")}</textarea></div>
-    <div class="field" id="eReplyF" hidden><label class="label" for="eReply">What they replied</label><textarea id="eReply" style="min-height:64px">${esc(reply?reply.comment||"":"")}</textarea></div>
+    <div class="field" id="eReplyF" hidden><label class="label" for="eReply">What they replied</label><textarea id="eReply" style="min-height:64px">${esc(reply?reply.comment||"":"")}</textarea><span class="small muted">${reply?"":"More replies can be added under Conversation on the event."}</span></div>
     <button class="primary" type="button" data-esave>Save changes</button>
   `,{kind:"edit",id,type:e.type,outcome:e.outcome,replyId:reply?reply.id:null});
   renderEditBits();
@@ -1023,10 +1035,36 @@ document.addEventListener("click",async ev=>{
     if(ne.type==="text"&&dirOf(ne)==="out"&&ne.outcome==="replied"){
       const r=c.replyId&&getEntry(c.replyId);const rAt=new Date(new Date(ne.at).getTime()+1000).toISOString();
       if(r){const rp={comment:replyText};if(patch.at)rp.at=rAt;if(patch.toLabel){rp.to=ne.to;rp.toLabel=ne.toLabel;rp.toNumber=ne.toNumber}await changeEntry(r.id,rp)}
-      else if(replyText){const x=baseEntry("text","in",ne.to,rAt,true);x.toLabel=ne.toLabel;x.toNumber=ne.toNumber;x.replyTo=ne.id;x.outcome="received";x.outcomeAt=x.loggedAt;x.comment=replyText;x.groupId=ne.groupId||ne.id;if(!ne.groupId)await upsert({...ne,groupId:ne.id});await upsert(x)}
+      else if(replyText&&!(ne.thread||[]).some(m=>m.from==="them"&&m.text===replyText)){await changeEntry(ne.id,{thread:[...(ne.thread||[]),{id:newId(),from:"them",text:replyText,at:null,addedAt:new Date().toISOString()}]})}
     }
     toast("Changes saved");
   }
+});
+function keepSheetState(){return {picked:sheetCtx.picked,cmt:$("cmt")?$("cmt").value:null,cat:$("nCat")?$("nCat").value:null}}
+function restoreSheetState(k){if(!sheetCtx)return;sheetCtx.picked=k.picked;if(k.cmt!=null&&$("cmt"))$("cmt").value=k.cmt;if(k.cat&&$("nCat"))$("nCat").value=k.cat;
+  document.querySelectorAll("[data-outcome]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.outcome===sheetCtx.picked))}
+document.addEventListener("click",async ev=>{
+  const t=ev.target.closest("[data-thadd],[data-thsave],[data-thcancel],[data-thdel]");if(!t||!sheetCtx||sheetCtx.kind!=="entry")return;
+  const e=getEntry(sheetCtx.id);if(!e)return;const D=t.dataset;
+  if(D.thadd){
+    const me=D.thadd==="me";const d=new Date();
+    $("thAdd").innerHTML=`<div class="thform"><label class="label" for="thText">${me?"My reply":esc(e.toLabel||"Their")+"'s reply"}</label>
+      <textarea id="thText" style="min-height:64px" placeholder="${me?"What you sent":"What they sent"}"></textarea>
+      <div class="row2"><div class="field"><label class="label" for="thDate">Date (optional)</label><input id="thDate" type="date" max="${dayKey(new Date())}" value="${dayKey(new Date(e.at))}"></div>
+      <div class="field"><label class="label" for="thTime">Time (optional)</label><input id="thTime" type="time"></div></div>
+      <div class="row2"><button class="secondary" type="button" data-thcancel>Cancel</button><button class="primary" type="button" data-thsave="${D.thadd}">Add</button></div></div>`;
+    $("thText").focus();return}
+  if(D.thcancel!==undefined){$("thAdd").innerHTML="";return}
+  if(D.thsave){
+    const text=$("thText").value.trim();if(!text){toast("Type the message first");return}
+    const dt=$("thDate").value,tm=$("thTime").value;const at=dt&&tm?new Date(dt+"T"+tm).toISOString():null;
+    const keep=keepSheetState();
+    const thread=[...(e.thread||[]),{id:newId(),from:D.thsave,text,at,addedAt:new Date().toISOString()}];
+    await changeEntry(e.id,{thread});entrySheet(e.id);restoreSheetState(keep);toast("Message added");return}
+  if(D.thdel){
+    if(t.dataset.sure!=="1"){t.dataset.sure="1";t.textContent="Remove?";t.classList.add("sure");return}
+    const keep=keepSheetState();
+    await changeEntry(e.id,{thread:(e.thread||[]).filter(m=>m.id!==D.thdel)});entrySheet(e.id);restoreSheetState(keep);toast("Message removed")}
 });
 async function deleteEntry(id){
   S.entries=S.entries.filter(e=>e.id!==id);render();
@@ -1072,10 +1110,10 @@ function rangeEntries(r){
 function typeName(e){if(e.type==="note")return "Note";if(e.replyTo)return e.type==="call"?"Called back (reply to my text)":"Reply to my text";return (e.type==="call"?"Call":"Text")+(dirOf(e)==="in"?" received":" made")}
 function rowOf(e){
   const o=outcomeOf(e);
-  const notes=[];const gm=groupMembers(e).filter(x=>!x.test);if(gm.length>=2){const ord=gm.slice().sort((a,b)=>new Date(a.at)-new Date(b.at));notes.push("step "+(ord.findIndex(x=>x.id===e.id)+1)+" of "+gm.length+" in one attempt")}if(e.via==="whatsapp")notes.push("via WhatsApp");if(e.backfilled)notes.push("added later");{const ed=(e.history||[]).filter(h=>Object.keys(h.changes||{}).some(k=>k!=="attachments")).length;if(ed)notes.push("edited "+ed+"x")}if(e.voided)notes.push("marked as mistake");if((e.attachments||[]).length)notes.push(e.attachments.length+" screenshot(s)");
+  const notes=[];const gm=groupMembers(e).filter(x=>!x.test);if(gm.length>=2){const ord=gm.slice().sort((a,b)=>new Date(a.at)-new Date(b.at));notes.push("step "+(ord.findIndex(x=>x.id===e.id)+1)+" of "+gm.length+" in one attempt")}if(e.via==="whatsapp")notes.push("via WhatsApp");if(e.backfilled)notes.push("added later");{const ed=(e.history||[]).filter(h=>Object.keys(h.changes||{}).some(k=>k!=="attachments"&&k!=="thread")).length;if(ed)notes.push("edited "+ed+"x")}if(e.voided)notes.push("marked as mistake");if((e.attachments||[]).length)notes.push(e.attachments.length+" screenshot(s)");
   const result=e.type==="note"?catLabel(e.category):(o?o.label:(e.type==="text"?"No reply marked":"Not recorded"));
   return {date:new Date(e.at).toLocaleDateString(),time:fmtTime(e.at),uk:ukStamp(e.at),type:typeName(e),phone:e.type==="note"?"":(e.toLabel||"")+(e.toNumber?" ("+e.toNumber+")":""),
-    result,comment:e.comment||"",logged:fmtStamp(e.loggedAt),answered:e.outcomeAt&&dirOf(e)==="out"?fmtStamp(e.outcomeAt):"",notes:notes.join(", ")};
+    result,comment:[e.comment||"",...(e.thread||[]).map(m=>(m.from==="me"?"Me":(e.toLabel||"Them"))+(m.at?" ("+fmtTime(m.at)+")":"")+": "+m.text)].filter(Boolean).join("\n"),logged:fmtStamp(e.loggedAt),answered:e.outcomeAt&&dirOf(e)==="out"?fmtStamp(e.outcomeAt):"",notes:notes.join(", ")};
 }
 const MIME={pdf:"application/pdf",csv:"text/csv",json:"application/json"};
 async function save(filename,data){
