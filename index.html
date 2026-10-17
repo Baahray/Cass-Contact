@@ -435,7 +435,7 @@ function changeEntry(id,patch){
   for(const k of Object.keys(patch)){
     const a=e[k],b=patch[k];
     if(JSON.stringify(a)===JSON.stringify(b))continue;
-    if(k==="approxSec")continue;
+    if(k==="approxSec"||k==="to"||k==="toNumber"||k==="groupId")continue;
     if(k==="outcome"&&a==null){isFirstAnswer=true;continue}
     if(k==="attachments"){changes[k]=["",""];continue}
     if(k==="comment"&&!a&&!e.outcomeAt&&e.type!=="note")continue;
@@ -744,6 +744,7 @@ function entrySheet(id,{justLogged}={}){
     ${ro?thumbsHTML(e):""}
     ${!ro&&!textShot?shotPicker("shot","Attach a screenshot, such as your Recents screen or the message thread.",e):""}
     ${ro?"":`<button class="primary" type="button" data-save>Save</button>`}
+    ${ro||justLogged?"":`<button class="secondary" type="button" data-editentry>Edit event</button>`}
     ${e.type==="text"&&justLogged?`<div class="muted small">No reply yet? Just close this. It stays under “Waiting for an answer” until you mark it.</div>`:""}
     <dl class="facts">
       <dt>${e.type==="note"?"Date":"Contact time"}</dt><dd class="mono">${esc(fmtStamp(e.at))}</dd>
@@ -758,7 +759,7 @@ function entrySheet(id,{justLogged}={}){
     ${justLogged||ro?"":`<div id="voidZone">${e.voided?`<button class="secondary" type="button" data-unvoid>Restore this entry</button>`:`<button class="danger" type="button" data-voidask>Mark as a mistake</button>`}<button class="danger" type="button" data-delask style="margin-top:8px">Delete event</button></div>`}
   `,{kind:"entry",id,picked:e.outcome});
 }
-function fieldName(k,e){return {test:"test flag",outcome:e.type==="call"?"result":"reply",comment:"comment",voided:"status",at:"time",category:"type of note"}[k]||k}
+function fieldName(k,e){return {toLabel:"person",type:"call or text",test:"test flag",outcome:e.type==="call"?"result":"reply",comment:"comment",voided:"status",at:"time",category:"type of note"}[k]||k}
 function valName(k,v,e){if(k==="outcome"){const o=outcomes(e.type,dirOf(e)).find(o=>o.k===v);return o?o.label:"(none)"}if(k==="voided")return v?"marked as mistake":"active";if(k==="at")return v?fmtStamp(v):"";if(k==="category")return catLabel(v);return v||"(empty)"}
 
 function settingsSheet(){
@@ -912,6 +913,66 @@ document.addEventListener("click",ev=>{
   else if(D.padd!==undefined){rows.push(blankRow(rows[rows.length-1]));renderPast();const last=$("pRows").lastElementChild;if(last)last.scrollIntoView({behavior:"smooth",block:"start"});return}
   else if(D.psave!==undefined){savePast();return}
   renderPast();
+});
+function editSheet(id){
+  const e=getEntry(id);if(!e)return;
+  const people=[["mum",contact("mum").label],["gran",contact("gran").label]].concat(dirOf(e)==="in"?[["cass",child()]]:[]).concat((S.cfg.others||[]).map(o=>[o.id,o.label]));
+  if(e.to&&e.type!=="note"&&!people.some(([k])=>k===e.to))people.push([e.to,e.toLabel||"Someone else"]);
+  const d=new Date(e.at);const reply=S.entries.find(x=>x.replyTo===e.id&&x.type==="text");
+  const isNote=e.type==="note",isOut=dirOf(e)==="out";
+  openSheet(`
+    <div class="sh"><div><h2>Edit ${isNote?"note":"event"}</h2><div class="muted small">Changes are kept in the entry's edit history.</div></div>${closeBtn}</div>
+    ${isNote?"":`<div class="field"><label class="label" for="eWho">Who</label><select id="eWho">${people.map(([k,l])=>`<option value="${esc(k)}" ${k===e.to?"selected":""}>${esc(l)}</option>`).join("")}<option value="__new">Someone else…</option></select><input id="eOther" placeholder="Their name" hidden autocomplete="off"></div>`}
+    <div class="row2"><div class="field"><label class="label" for="eDate">Date</label><input id="eDate" type="date" max="${dayKey(new Date())}" value="${dayKey(d)}"></div>
+      <div class="field"><label class="label" for="eTime">Time</label><input id="eTime" type="time" value="${pad2(d.getHours())}:${pad2(d.getMinutes())}"></div></div>
+    ${isNote?"":`<div class="pseg"><button type="button" data-etype="call" aria-pressed="${e.type==="call"}">Call</button><button type="button" data-etype="text" aria-pressed="${e.type==="text"}">Text</button></div>
+    <div class="field"><span class="label">What happened</span><div class="pseg" id="eRes"></div></div>`}
+    <div class="field"><label class="label" for="eCmt" id="eCmtLabel">${isNote?"What happened":"Comment"}</label><textarea id="eCmt">${esc(e.comment||"")}</textarea></div>
+    <div class="field" id="eReplyF" hidden><label class="label" for="eReply">What they replied</label><textarea id="eReply" style="min-height:64px">${esc(reply?reply.comment||"":"")}</textarea></div>
+    <button class="primary" type="button" data-esave>Save changes</button>
+  `,{kind:"edit",id,type:e.type,outcome:e.outcome,replyId:reply?reply.id:null});
+  renderEditBits();
+  const w=$("eWho");if(w)w.addEventListener("change",()=>{$("eOther").hidden=w.value!=="__new"});
+}
+function renderEditBits(){
+  const c=sheetCtx;if(!c||c.kind!=="edit")return;const e=getEntry(c.id);if(e.type==="note")return;
+  const opts=outcomes(c.type,dirOf(e));if(!opts.some(o=>o.k===c.outcome))c.outcome=null;
+  $("eRes").innerHTML=opts.map(o=>`<button type="button" data-eres="${o.k}" aria-pressed="${c.outcome===o.k}">${esc(o.label)}</button>`).join("");
+  document.querySelectorAll("[data-etype]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.etype===c.type));
+  $("eCmtLabel").textContent=c.type==="text"&&dirOf(e)==="out"?"What I texted":"Comment";
+  $("eReplyF").hidden=!(c.type==="text"&&dirOf(e)==="out"&&c.outcome==="replied");
+}
+document.addEventListener("click",async ev=>{
+  const t=ev.target.closest("[data-editentry],[data-etype],[data-eres],[data-esave]");if(!t||!sheetCtx)return;
+  const D=t.dataset;
+  if(D.editentry!==undefined&&sheetCtx.kind==="entry"){editSheet(sheetCtx.id);return}
+  if(sheetCtx.kind!=="edit")return;
+  if(D.etype){sheetCtx.type=D.etype;renderEditBits();return}
+  if(D.eres){sheetCtx.outcome=D.eres;renderEditBits();return}
+  if(D.esave!==undefined){
+    const c=sheetCtx;const e=getEntry(c.id);
+    const dt=$("eDate").value,tm=$("eTime").value;if(!dt||!tm){toast("Add the date and time");return}
+    const at=new Date(dt+"T"+tm);if(at>new Date(Date.now()+60000)){toast("That time is in the future");return}
+    const old=new Date(e.at);const sameMinute=dayKey(old)===dt&&pad2(old.getHours())+":"+pad2(old.getMinutes())===tm;
+    const patch={comment:$("eCmt").value.trim()};
+    if(!sameMinute)patch.at=at.toISOString();
+    if(e.type!=="note"){
+      let who=$("eWho").value;
+      if(who==="__new"){const nm=$("eOther").value.trim();if(!nm){toast("Add their name");return}who=rememberOther(nm,"").id}
+      if(who!==e.to){const ct=contact(who);patch.to=who;patch.toLabel=ct.label;patch.toNumber=ct.number}
+      patch.type=c.type;if(c.outcome)patch.outcome=c.outcome;
+    }
+    const replyText=$("eReply")?$("eReply").value.trim():"";
+    closeSheet();
+    await changeEntry(c.id,patch);
+    const ne=getEntry(c.id);
+    if(ne.type==="text"&&dirOf(ne)==="out"&&ne.outcome==="replied"){
+      const r=c.replyId&&getEntry(c.replyId);const rAt=new Date(new Date(ne.at).getTime()+1000).toISOString();
+      if(r){const rp={comment:replyText};if(patch.at)rp.at=rAt;if(patch.toLabel){rp.to=ne.to;rp.toLabel=ne.toLabel;rp.toNumber=ne.toNumber}await changeEntry(r.id,rp)}
+      else if(replyText){const x=baseEntry("text","in",ne.to,rAt,true);x.toLabel=ne.toLabel;x.toNumber=ne.toNumber;x.replyTo=ne.id;x.outcome="received";x.outcomeAt=x.loggedAt;x.comment=replyText;x.groupId=ne.groupId||ne.id;if(!ne.groupId)await upsert({...ne,groupId:ne.id});await upsert(x)}
+    }
+    toast("Changes saved");
+  }
 });
 async function deleteEntry(id){
   S.entries=S.entries.filter(e=>e.id!==id);render();
