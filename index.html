@@ -371,7 +371,7 @@ button.ghead{width:100%;border:0;text-align:left;font:inherit;color:inherit;curs
 (function(){
 "use strict";
 // ---------- state ----------
-const APP_VERSION="9";
+const APP_VERSION="10";
 const DEFAULT_CFG={child:"Cass",phones:{mum:{label:"Christie",number:""},gran:{label:"May",number:""}},others:[]};
 const S={open:new Set(),days:{},entries:[],cfg:JSON.parse(JSON.stringify(DEFAULT_CFG)),cfgLoaded:false,db:null,assets:null,downloads:null,
   canWrite:true,lastBackup:null,backupLoaded:false,
@@ -601,8 +601,7 @@ document.addEventListener("click",ev=>{
 const needsReply=e=>S.canWrite&&e.type==="text"&&dirOf(e)==="out"&&!e.voided&&(!e.outcome||e.outcome==="no_reply")&&(dayKey(e.at)===dayKey(new Date())||!e.outcome);
 function entryHTML(e,opts={}){
   const inner=entryCore(e,opts);
-  if(!needsReply(e))return inner;
-  return inner.replace(/<\/div>\s*$/,`<div class="eactions"><button type="button" class="replybtn" data-reply="${esc(e.id)}">They replied</button></div></div>`);
+  return inner;
 }
 const CHEV='<svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
 function entryCore(e,opts={}){
