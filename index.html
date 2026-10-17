@@ -579,10 +579,11 @@ function entryHTML(e,opts={}){
 function entryCore(e,opts={}){
   const o=outcomeOf(e);let pill;
   if(e.type==="note")pill=`<span class="pill note">Note</span>`;
+  else if(e.replyTo&&e.type==="text")pill=`<span class="pill in">Reply</span>`;
   else if(o)pill=`<span class="pill ${o.tone}">${esc(o.label)}</span>`;
   else pill=`<span class="pill pend">${e.type==="text"?"Waiting for reply":"Tap to add what happened"}</span>`;
   const tags=[];
-  if(dirOf(e)==="in"&&e.type!=="note")tags.push('<span class="tag">they contacted you</span>');
+  if(dirOf(e)==="in"&&e.type!=="note")tags.push(e.replyTo?`<span class="tag">${e.type==="call"?"called back after your text":"reply to your text"}</span>`:'<span class="tag">they contacted you</span>');
   if(e.via==="whatsapp"&&dirOf(e)==="out")tags.push('<span class="tag wa">WhatsApp</span>');
   if(e.backfilled)tags.push('<span class="tag">added later</span>');
   if((e.history||[]).some(h=>Object.keys(h.changes||{}).some(k=>k!=="attachments")))tags.push('<span class="tag">edited</span>');
@@ -644,7 +645,7 @@ function stats(days){
   let tried=0,spoke=0,calls=0,texts=0,incoming=0;const firsts=[];
   for(const k of keys){const l=byDay[k]||[];
     if(l.some(e=>e.outcome==="spoke"))spoke++;
-    incoming+=l.filter(e=>e.type!=="note"&&dirOf(e)==="in").length;
+    incoming+=l.filter(e=>e.type!=="note"&&dirOf(e)==="in"&&!e.replyTo).length;
     const out=l.filter(isOutContact);if(!out.length)continue;tried++;
     calls+=out.filter(e=>e.type==="call").length;texts+=out.filter(e=>e.type==="text").length;
     const first=out.reduce((a,b)=>new Date(a.at)<new Date(b.at)?a:b);const d=new Date(first.at);firsts.push(d.getHours()*60+d.getMinutes());}
@@ -666,7 +667,7 @@ function renderSummary(){
       <div class="stat"><div class="label">Your calls · texts</div><div class="v mono">${s.calls} · ${s.texts}</div></div>
       <div class="stat"><div class="label">Usual time</div><div class="v mono">${s.usual||"—"}</div>${s.usualAt&&!sameTz()?`<div class="small muted mono">${esc(ukTime(s.usualAt))} ${esc(UK_LABEL())}</div>`:""}</div>
     </div>
-    <div class="muted small" style="margin-top:10px">They contacted you ${s.incoming} ${s.incoming===1?"time":"times"} in this period.</div>`;
+    <div class="muted small" style="margin-top:10px">They contacted you first ${s.incoming} ${s.incoming===1?"time":"times"} in this period (replies to your texts not counted).</div>`;
 }
 function renderCal(){
   const m=S.month;const y=m.getFullYear(),mo=m.getMonth();
@@ -692,7 +693,8 @@ function renderCal(){
 function matchFilter(e,f){
   if(f==="all")return true;
   if(f==="note")return e.type==="note";
-  if(f==="in")return e.type!=="note"&&dirOf(e)==="in";
+  if(f==="in")return e.type!=="note"&&dirOf(e)==="in"&&!e.replyTo;
+  if(f==="text"&&e.replyTo)return true;
   return e.type===f&&dirOf(e)==="out";
 }
 function renderLog(){
@@ -1015,7 +1017,7 @@ function rangeEntries(r){
   const t=new Date();const start=new Date(t.getFullYear(),t.getMonth(),t.getDate()-(Number(r)-1));
   return real.filter(e=>new Date(e.at)>=start).slice().reverse();
 }
-function typeName(e){if(e.type==="note")return "Note";return (e.type==="call"?"Call":"Text")+(dirOf(e)==="in"?" received":" made")}
+function typeName(e){if(e.type==="note")return "Note";if(e.replyTo)return e.type==="call"?"Called back (reply to my text)":"Reply to my text";return (e.type==="call"?"Call":"Text")+(dirOf(e)==="in"?" received":" made")}
 function rowOf(e){
   const o=outcomeOf(e);
   const notes=[];const gm=groupMembers(e).filter(x=>!x.test);if(gm.length>=2){const ord=gm.slice().sort((a,b)=>new Date(a.at)-new Date(b.at));notes.push("step "+(ord.findIndex(x=>x.id===e.id)+1)+" of "+gm.length+" in one attempt")}if(e.via==="whatsapp")notes.push("via WhatsApp");if(e.backfilled)notes.push("added later");{const ed=(e.history||[]).filter(h=>Object.keys(h.changes||{}).some(k=>k!=="attachments")).length;if(ed)notes.push("edited "+ed+"x")}if(e.voided)notes.push("marked as mistake");if((e.attachments||[]).length)notes.push(e.attachments.length+" screenshot(s)");
@@ -1075,7 +1077,7 @@ function exportPDF(r){
   const spoke=Object.keys(byAll).filter(k=>byAll[k].some(e=>e.outcome==="spoke")).length;
   const span=r==="all"?(list.length?Math.round((fromKey(dayKey(new Date()))-fromKey(dayKey(list[0].at)))/864e5)+1:0):Number(r);
   const lines=[`Days I called or texted: ${Object.keys(byOut).length} of ${span}`,`Days I spoke to ${child()}: ${spoke}`,
-    `Calls made: ${out.filter(e=>e.type==="call").length}   Texts sent: ${out.filter(e=>e.type==="text").length}   Calls/texts received: ${lv.filter(e=>e.type!=="note"&&dirOf(e)==="in").length}   Notes: ${lv.filter(e=>e.type==="note").length}`];
+    `Calls made: ${out.filter(e=>e.type==="call").length}   Texts sent: ${out.filter(e=>e.type==="text").length}   Replies to my texts: ${lv.filter(e=>e.replyTo).length}   They contacted me first: ${lv.filter(e=>e.type!=="note"&&dirOf(e)==="in"&&!e.replyTo).length}   Notes: ${lv.filter(e=>e.type==="note").length}`];
   {const ks=Object.keys(S.days).filter(k=>(S.days[k].shots||[]).length&&(r==="all"||fromKey(k)>=new Date(new Date().getFullYear(),new Date().getMonth(),new Date().getDate()-(Number(r)-1))));const n=ks.reduce((a,k)=>a+S.days[k].shots.length,0);if(n)lines.push(`Day screenshots kept in the app: ${n} across ${ks.length} day${ks.length===1?"":"s"} (included in the app backup)`)}
   doc.setFontSize(11);lines.forEach((l,i)=>doc.text(l,40,90+i*16));
   doc.autoTable({startY:96+lines.length*16,head:[["Date","My time",UK_LABEL()+" time","Type","Person","Result","Comment","Logged at","Notes"]],
