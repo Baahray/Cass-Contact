@@ -292,6 +292,7 @@ button.ghead{width:100%;border:0;text-align:left;font:inherit;color:inherit;curs
 .bub .bdel.sure{width:auto;padding:0 8px;color:var(--miss);border-color:var(--miss);font-size:.75rem;font-weight:700}
 .sheet .thread{gap:10px}
 .thform{display:flex;flex-direction:column;gap:8px;background:var(--bg);border-radius:12px;padding:12px}
+.ddbody .dayshots{margin-top:0}
 </style>
 </head>
 <body>
@@ -380,7 +381,7 @@ button.ghead{width:100%;border:0;text-align:left;font:inherit;color:inherit;curs
 (function(){
 "use strict";
 // ---------- state ----------
-const APP_VERSION="11";
+const APP_VERSION="12";
 const DEFAULT_CFG={child:"Cass",phones:{mum:{label:"Christie",number:""},gran:{label:"May",number:""}},others:[]};
 const S={open:new Set(),days:{},entries:[],cfg:JSON.parse(JSON.stringify(DEFAULT_CFG)),cfgLoaded:false,db:null,assets:null,downloads:null,
   canWrite:true,lastBackup:null,backupLoaded:false,
@@ -663,14 +664,16 @@ function countParts(list){
   const p=[];if(nc)p.push(nc+" call"+(nc===1?"":"s"));if(nt)p.push(nt+" text"+(nt===1?"":"s"));if(nr)p.push(nr+" repl"+(nr===1?"y":"ies"));if(ni)p.push(ni+" from them");if(nn)p.push(nn+" note"+(nn===1?"":"s"));
   return p.join(" · ");
 }
-function dayDrop(k,list,title){
+function dayDrop(k,list,title,withShots){
   const key="d:"+k;const open=S.open.has(key);
+  const nDay=((S.days[k]||{}).shots||[]).length,nEnt=list.reduce((a,x)=>a+(x.attachments||[]).length,0),nShots=nDay+nEnt;
+  const summary=[list.length?list.length+" event"+(list.length===1?"":"s"):"",countParts(list),nShots?nShots+" screenshot"+(nShots===1?"":"s"):""].filter(Boolean).join(" · ");
   const real=list.filter(x=>!x.voided&&!x.test);const spoke=real.some(x=>x.outcome==="spoke");const tried=real.some(isOutContact);
   const pill=spoke?`<span class="pill good">Spoke to ${esc(child())}</span>`:tried?`<span class="pill mid">Didn't reach ${esc(child())}</span>`:"";
   return `<div class="daydrop${open?" open":""}"><button type="button" class="ddhead" data-toggle="${esc(key)}" aria-expanded="${open}">
-    <div class="ddt"><b>${esc(title)}</b><span class="small muted">${list.length} event${list.length===1?"":"s"}${countParts(list)?" · "+esc(countParts(list)):""}</span></div>
+    <div class="ddt"><b>${esc(title)}</b><span class="small muted">${esc(summary)}</span></div>
     <span class="gr">${pill}${CHEV}</span></button>
-    ${open?`<div class="entries ddbody">${listHTML(list)}</div>`:""}</div>`;
+    ${open?`<div class="entries ddbody">${list.length?listHTML(list):""}${withShots?dayShotsHTML(k):""}</div>`:""}</div>`;
 }
 document.addEventListener("click",ev=>{
   const t=ev.target.closest("[data-toggle]");if(!t)return;
@@ -763,10 +766,12 @@ function matchFilter(e,f){
 }
 function renderLog(){
   const f=S.logFilter;const list=S.entries.filter(e=>matchFilter(e,f));
-  if(!list.length){$("logList").innerHTML=`<div class="empty">${S.dbState==="loading"?"Loading…":"No entries here yet."}</div>`;return}
-  const by=groupByDay(list);const keys=Object.keys(by).sort().reverse();
+  const by=groupByDay(list);
+  if(f==="all")for(const k of Object.keys(S.days))if(((S.days[k]||{}).shots||[]).length&&!by[k])by[k]=[];
+  const keys=Object.keys(by).sort().reverse();
+  if(!keys.length){$("logList").innerHTML=`<div class="empty">${S.dbState==="loading"?"Loading…":"No entries here yet."}</div>`;return}
   $("logList").innerHTML=keys.map(k=>{const l=by[k].slice().reverse();
-    return dayDrop(k,l,fmtDayLong(fromKey(k)))}).join("");
+    return dayDrop(k,l,fmtDayLong(fromKey(k)),f==="all")}).join("");
 }
 
 // ---------- sheets ----------
