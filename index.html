@@ -293,6 +293,10 @@ button.ghead{width:100%;border:0;text-align:left;font:inherit;color:inherit;curs
 .sheet .thread{gap:10px}
 .thform{display:flex;flex-direction:column;gap:8px;background:var(--bg);border-radius:12px;padding:12px}
 .ddbody .dayshots{margin-top:0}
+.cnbtn{background:none;border:0;padding:0;text-align:left;font:inherit;color:inherit;cursor:pointer}
+.cnbtn b{display:block;font-size:1.15rem}
+.cnbtn span{font-size:.8rem;color:var(--muted)}
+.crow.addc{width:100%;justify-content:center;background:none;border:0;border-top:1px solid var(--line);color:var(--accent);font:inherit;font-weight:700;padding:13px;cursor:pointer}
 </style>
 </head>
 <body>
@@ -381,7 +385,7 @@ button.ghead{width:100%;border:0;text-align:left;font:inherit;color:inherit;curs
 (function(){
 "use strict";
 // ---------- state ----------
-const APP_VERSION="12";
+const APP_VERSION="13";
 const DEFAULT_CFG={child:"Cass",phones:{mum:{label:"Christie",number:""},gran:{label:"May",number:""}},others:[]};
 const S={open:new Set(),days:{},entries:[],cfg:JSON.parse(JSON.stringify(DEFAULT_CFG)),cfgLoaded:false,db:null,assets:null,downloads:null,
   canWrite:true,lastBackup:null,backupLoaded:false,
@@ -569,7 +573,11 @@ function renderPad(){
   const rows=["mum","gran"].map(w=>{const c=contact(w);const call=actLink("call",w).href,text=actLink("text",w).href;
     return `<div class="crow"><div class="cn"><b>${esc(c.label)}</b>${c.number?`<span class="mono">${esc(c.number)}</span>`:`<span class="warn">No number yet</span>`}</div>
       <div class="cbtns"><a class="cbtn call" href="${call}" data-act="call" data-who="${w}">${ICON_CALL}Call</a><a class="cbtn text" href="${text}" data-act="text" data-who="${w}" aria-label="Text ${esc(c.label)}">${ICON_TEXT}Text</a></div></div>`});
-  rows.push(`<div class="crow someone"><div class="cn"><b>Someone else</b><span>Grandad, a relative…</span></div><div class="cbtns"><button type="button" class="cbtn pick" data-otherpick>Choose</button></div></div>`);
+  for(const o of (S.cfg.others||[]).filter(o=>o.pinned)){const c=contact(o.id);const call=actLink("call",o.id).href,text=actLink("text",o.id).href;
+    rows.push(`<div class="crow"><button type="button" class="cn cnbtn" data-editcontact="${esc(o.id)}" aria-label="Edit ${esc(c.label)}"><b>${esc(c.label)}</b>${c.number?`<span class="mono">${esc(c.number)}</span>`:`<span class="warn">No number yet</span>`}</button>
+      <div class="cbtns"><a class="cbtn call" href="${call}" data-act="call" data-who="${esc(o.id)}">${ICON_CALL}Call</a><a class="cbtn text" href="${text}" data-act="text" data-who="${esc(o.id)}" aria-label="Text ${esc(c.label)}">${ICON_TEXT}Text</a></div></div>`)}
+  rows.push(`<div class="crow someone"><div class="cn"><b>Someone else</b><span>A one-off call or text</span></div><div class="cbtns"><button type="button" class="cbtn pick" data-otherpick>Choose</button></div></div>`);
+  rows.push(`<button type="button" class="crow addc" data-addcontact>+ Add contact</button>`);
   $("pad").innerHTML=rows.join("");
 }
 function moreSheet(){
@@ -838,9 +846,9 @@ function valName(k,v,e){if(k==="outcome"){const o=outcomes(e.type,dirOf(e)).find
 
 function settingsSheet(){
   const c=S.cfg;
-  const others=(c.others||[]).map(o=>`<div class="orow"><span class="nm"><b>${esc(o.label)}</b><span class="mono small muted">${esc(o.number||"No number")}</span></span><button class="rm" type="button" data-rmother="${esc(o.id)}">Remove</button></div>`).join("");
+  const others=(c.others||[]).filter(o=>o.pinned).map(o=>`<div class="orow"><span class="nm"><b>${esc(o.label)}</b><span class="mono small muted">${esc(o.number||"No number")}</span></span><button class="rm" type="button" style="color:var(--ink)" data-editcontact="${esc(o.id)}">Edit</button></div>`).join("");
   openSheet(`
-    <div class="sh"><h2>Phones</h2>${closeBtn}</div>
+    <div class="sh"><h2>Settings</h2>${closeBtn}</div>
     <div class="row2"><div class="field"><label class="label" for="pLab1">Name</label><input id="pLab1" value="${esc(c.phones.mum.label)}"></div>
       <div class="field"><label class="label" for="pNum1">Number</label><input id="pNum1" type="tel" inputmode="tel" placeholder="(555) 123-4567" value="${esc(c.phones.mum.number)}"></div></div>
     <div class="row2"><div class="field"><label class="label" for="pLab2">Name</label><input id="pLab2" value="${esc(c.phones.gran.label)}"></div>
@@ -853,10 +861,41 @@ function settingsSheet(){
     <div class="field"><label class="label" for="pCC">Country code for numbers starting with 0</label><input id="pCC" inputmode="numeric" value="${esc(c.cc||"44")}" placeholder="44"><span class="small muted">44 is the UK. A number like 07700 900123 is opened in WhatsApp as +44 7700 900123.</span></div>
     <label class="orow" style="cursor:pointer"><span class="nm"><b>Test mode</b><span class="small muted">New entries are marked as tests and left out of totals and exports.</span></span><input id="pTest" type="checkbox" style="width:24px;height:24px;flex:none" ${c.testMode?"checked":""}></label>
     <button class="primary" type="button" data-savecfg>Save</button>
-    ${others?`<div class="field"><span class="label">Other people</span><div class="olist">${others}</div><span class="muted small">Removing someone only takes them off the quick list. Past entries keep their name.</span></div>`:""}
+    <div class="field"><span class="label">Contacts</span>${others?`<div class="olist">${others}</div>`:`<span class="small muted">No other contacts yet.</span>`}<button class="secondary" type="button" data-addcontact>+ Add contact</button></div>
     <div class="muted small">Each entry keeps the name and number it was made with, so changing these later doesn't rewrite past entries.</div>
   `,{kind:"settings"});
 }
+function contactSheet(id){
+  const o=id?(S.cfg.others||[]).find(x=>x.id===id):null;
+  openSheet(`
+    <div class="sh"><div><h2>${o?"Edit contact":"Add contact"}</h2><div class="muted small">Someone you call or text to reach ${esc(child())}, like his grandad or a relative.</div></div>${closeBtn}</div>
+    <div class="field"><label class="label" for="cName">Name</label><input id="cName" value="${esc(o?o.label:"")}" placeholder="e.g. Grandad" autocomplete="off"></div>
+    <div class="field"><label class="label" for="cNum">Number</label><input id="cNum" type="tel" inputmode="tel" value="${esc(o?o.number||"":"")}" placeholder="e.g. 07700 900123"></div>
+    <label class="orow" style="cursor:pointer"><span class="nm"><b>Show on main screen</b><span class="small muted">Gives them their own Call and Text buttons.</span></span><input id="cPin" type="checkbox" style="width:24px;height:24px;flex:none" ${!o||o.pinned?"checked":""}></label>
+    <button class="primary" type="button" data-csave="${esc(id||"")}">${o?"Save changes":"Add contact"}</button>
+    ${o?`<div id="cDelZone"><button class="danger" type="button" data-cdelask>Remove contact</button></div><div class="muted small">Removing a contact doesn't change past entries. They keep the name and number they were logged with.</div>`:""}
+  `,{kind:"contact",id:id||null});
+  setTimeout(()=>{if(!o&&$("cName"))$("cName").focus()},50);
+}
+document.addEventListener("click",async ev=>{
+  const t=ev.target.closest("[data-addcontact],[data-editcontact],[data-csave],[data-cdelask],[data-cdelyes],[data-cdelno]");if(!t)return;const D=t.dataset;
+  if(D.addcontact!==undefined){contactSheet(null);return}
+  if(D.editcontact){contactSheet(D.editcontact);return}
+  if(!sheetCtx||sheetCtx.kind!=="contact")return;
+  if(D.csave!==undefined){
+    const label=$("cName").value.trim(),number=$("cNum").value.trim(),pinned=$("cPin").checked;
+    if(!label){toast("Add their name");return}
+    const all=S.cfg.others||[];const id=sheetCtx.id;
+    if(!id&&all.some(o=>o.label.toLowerCase()===label.toLowerCase()&&o.pinned)){toast("You already have a contact called "+label);return}
+    let others;
+    if(id)others=all.map(o=>o.id===id?{...o,label,number,pinned}:o);
+    else{const same=all.find(o=>o.label.toLowerCase()===label.toLowerCase());
+      others=same?all.map(o=>o===same?{...o,label,number:number||o.number,pinned}:o):[...all,{id:otherId(),label,number,pinned}]}
+    S.cfg={...S.cfg,others};closeSheet();render();await saveCfg();toast(id?"Contact updated":label+" added");return}
+  if(D.cdelask!==undefined){$("cDelZone").innerHTML=`<div class="confirm">Remove this contact? Past entries stay as they are.<div class="row2"><button class="secondary" type="button" data-cdelno>Keep</button><button class="danger" type="button" data-cdelyes>Remove</button></div></div>`;return}
+  if(D.cdelno!==undefined){contactSheet(sheetCtx.id);return}
+  if(D.cdelyes!==undefined){const id=sheetCtx.id;S.cfg={...S.cfg,others:(S.cfg.others||[]).filter(o=>o.id!==id)};closeSheet();render();await saveCfg();toast("Contact removed")}
+});
 function otherSheet(){
   const recent=S.cfg.others||[];
   openSheet(`
@@ -874,8 +913,9 @@ const otherId=()=>"o_"+newId().replace(/[^a-z0-9]/g,"");
 function rememberOther(label,number){
   const all=S.cfg.others||[];
   const found=all.find(o=>o.label.toLowerCase()===label.toLowerCase());
-  const rec={id:found?found.id:otherId(),label,number:number||(found?found.number:"")};
-  S.cfg={...S.cfg,others:[rec,...all.filter(o=>o!==found)].slice(0,8)};
+  const rec={id:found?found.id:otherId(),label,number:number||(found?found.number:""),pinned:!!(found&&found.pinned)};
+  const rest=[rec,...all.filter(o=>o!==found)];let unp=0;
+  S.cfg={...S.cfg,others:rest.filter(o=>o.pinned||(++unp)<=8)};
   saveCfg();return rec;
 }
 function inSheet(){
