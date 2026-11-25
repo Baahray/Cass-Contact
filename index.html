@@ -297,6 +297,14 @@ button.ghead{width:100%;border:0;text-align:left;font:inherit;color:inherit;curs
 .cnbtn b{display:block;font-size:1.15rem}
 .cnbtn span{font-size:.8rem;color:var(--muted)}
 .crow.addc{width:100%;justify-content:center;background:none;border:0;border-top:1px solid var(--line);color:var(--accent);font:inherit;font-weight:700;padding:13px;cursor:pointer}
+.monthly{position:fixed;inset:0;z-index:70;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:calc(20px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) calc(20px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));overflow-y:auto}
+.mcard{width:100%;max-width:460px;background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:22px;display:flex;flex-direction:column;gap:12px}
+.mcard h2{font-size:1.4rem}
+.mcard p{margin:0}
+.mstatus{background:var(--bg);border-radius:12px;padding:12px;font-weight:700;font-size:.92rem}
+.mstatus.ok{background:var(--good-soft);color:var(--good)}
+.mstatus.bad{background:var(--miss-soft);color:var(--miss)}
+.mskip{align-self:center;background:none;border:0;color:var(--muted);font:inherit;font-size:.88rem;text-decoration:underline;padding:6px;cursor:pointer}
 </style>
 </head>
 <body>
@@ -376,6 +384,15 @@ button.ghead{width:100%;border:0;text-align:left;font:inherit;color:inherit;curs
 
 <div class="scrim" id="scrim" hidden></div>
 <div class="sheet" id="sheet" hidden role="dialog" aria-modal="true"><div class="in" id="sheetIn"></div></div>
+<div class="monthly" id="monthly" hidden role="dialog" aria-modal="true" aria-labelledby="mTitle"><div class="mcard">
+  <div class="label" id="mEyebrow">Monthly report</div>
+  <h2 id="mTitle">Your monthly report</h2>
+  <p id="mText" class="muted"></p>
+  <div id="mStatus" class="mstatus" role="status">Making the report…</div>
+  <button class="primary" type="button" id="mSave" data-msave disabled>Save PDF to Files</button>
+  <span class="small muted" id="mHint">In the menu that opens, choose <b>Save to Files</b>. You can also choose Mail to email it to yourself.</span>
+  <button class="mskip" type="button" data-mskip>Not now</button>
+</div></div>
 <div class="toast" id="toast" hidden></div>
 
 <script src="lib/jspdf.umd.min.js"></script>
@@ -385,9 +402,9 @@ button.ghead{width:100%;border:0;text-align:left;font:inherit;color:inherit;curs
 (function(){
 "use strict";
 // ---------- state ----------
-const APP_VERSION="14";
+const APP_VERSION="15";
 const DEFAULT_CFG={child:"Cass",phones:{mum:{label:"Christie",number:""},gran:{label:"May",number:""}},others:[]};
-const S={open:new Set(),days:{},entries:[],cfg:JSON.parse(JSON.stringify(DEFAULT_CFG)),cfgLoaded:false,db:null,assets:null,downloads:null,
+const S={monthly:{done:{}},monthlyLoaded:false,monthSkip:null,monthBusy:false,monthReady:null,open:new Set(),days:{},entries:[],cfg:JSON.parse(JSON.stringify(DEFAULT_CFG)),cfgLoaded:false,db:null,assets:null,downloads:null,
   canWrite:true,lastBackup:null,backupLoaded:false,
   dbState:"loading",tab:"today",selDay:null,month:null,logFilter:"all",activeCallId:null,hiddenAt:null};
 const $=id=>document.getElementById(id);
@@ -1143,6 +1160,7 @@ function exportSheet(){
     <button class="secondary" type="button" data-csv>Download spreadsheet (CSV)</button>
     <button class="secondary" type="button" data-backup>Save full backup</button>
     <label class="secondary filepick" style="text-align:center;cursor:pointer">Restore from a backup<input id="restoreFile" type="file" accept=".json,application/json"></label>
+    ${Object.keys(S.monthly.done).length?`<div class="small muted">Monthly reports saved: ${Object.keys(S.monthly.done).sort().map(monthName).join(", ")}</div>`:""}
     <div class="muted small">The PDF report is the file to send to a lawyer, mediator or anyone else. It lists every entry with both time zones, when it was logged, edits and entries added later, so the record is transparent. The backup is only for restoring the app.</div>
   `,{kind:"export"});
 }
@@ -1217,13 +1235,22 @@ async function exportPDF(r,withShots){
   const setBtn=t=>{if(btn){btn.textContent=t;btn.disabled=t!=="Make PDF report"}};
   setBtn("Making report…");
   try{
-  const list=rangeEntries(r);
-  const start=r==="all"?null:new Date(new Date().getFullYear(),new Date().getMonth(),new Date().getDate()-(Number(r)-1));
+    const list=rangeEntries(r);
+    const start=r==="all"?null:new Date(new Date().getFullYear(),new Date().getMonth(),new Date().getDate()-(Number(r)-1));
+    const span=r==="all"?(list.length?Math.round((fromKey(dayKey(new Date()))-fromKey(dayKey(list[0].at)))/864e5)+1:0):Number(r);
+    const rep=await buildReport({list,start,end:null,period:r==="all"?"All entries":"Last "+r+" days",span,withShots,name:`contact-log-${slug()}-${dayKey(new Date())}.pdf`,onProgress:setBtn});
+    S.pdfReady={name:rep.name,data:rep.data};setBtn("Make PDF report");
+    if(ready)ready.innerHTML=`<div class="shotbox has"><span class="shotok">✓ Report ready: ${rep.pages} page${rep.pages===1?"":"s"}${rep.figs?`, ${rep.figs} screenshot${rep.figs===1?"":"s"}`:""} (${fmtSize(rep.data.byteLength)})</span><button class="primary" type="button" data-pdfsave>Save or send report</button><span class="small muted">Choose Mail, Messages or WhatsApp to send it, or Save to Files to keep a copy.</span></div>`;
+  }catch(err){setBtn("Make PDF report");toast("Couldn't make the report. Try a shorter period, or turn off screenshots.")}
+}
+async function buildReport({list,start,end,period,span,withShots,name,onProgress}){
+  const setBtn=onProgress||(()=>{});
+  {
   // figures: by day, entry screenshots in time order, then that day's screenshots
   const figs=[];const figOf={};
   if(withShots){
     const dayKeys=new Set(list.filter(e=>(e.attachments||[]).length).map(e=>dayKey(e.at)));
-    for(const k of Object.keys(S.days))if((S.days[k].shots||[]).length&&(!start||fromKey(k)>=start))dayKeys.add(k);
+    for(const k of Object.keys(S.days))if((S.days[k].shots||[]).length&&(!start||fromKey(k)>=start)&&(!end||fromKey(k)<=end))dayKeys.add(k);
     for(const k of [...dayKeys].sort()){
       for(const e of list.filter(x=>dayKey(x.at)===k))for(const a of (e.attachments||[])){figs.push({id:a.id,day:k,entry:e});(figOf[e.id]=figOf[e.id]||[]).push(figs.length)}
       for(const a of ((S.days[k]||{}).shots||[]))figs.push({id:a.id,day:k,entry:null});
@@ -1234,7 +1261,6 @@ async function exportPDF(r,withShots){
   const W=doc.internal.pageSize.getWidth(),H=doc.internal.pageSize.getHeight();
   doc.setFont("helvetica","bold");doc.setFontSize(16);doc.text("Contact log: calls and texts to reach "+child(),40,48);
   doc.setFont("helvetica","normal");doc.setFontSize(9.5);
-  const period=r==="all"?"All entries":"Last "+r+" days";
   const first=list.length?new Date(list[0].at).toLocaleDateString():"",last=list.length?new Date(list[list.length-1].at).toLocaleDateString():"";
   let y=66;
   const intro=doc.splitTextToSize(`${period}${list.length?` (${first} to ${last})`:""}. Generated ${fmtStamp(new Date())}${tz?" ("+tz+")":""}. Times are shown in my time zone (${tz}) and ${UK_LABEL()} time (${ukTz()}).`,W-80);
@@ -1242,7 +1268,6 @@ async function exportPDF(r,withShots){
   const lv=list.filter(e=>!e.voided);const out=lv.filter(isOutContact);
   const byOut=groupByDay(out);const byAll=groupByDay(lv);
   const spoke=Object.keys(byAll).filter(k=>byAll[k].some(e=>e.outcome==="spoke")).length;
-  const span=r==="all"?(list.length?Math.round((fromKey(dayKey(new Date()))-fromKey(dayKey(list[0].at)))/864e5)+1:0):Number(r);
   const lines=[`Days I called or texted: ${Object.keys(byOut).length} of ${span}`,`Days I spoke to ${child()}: ${spoke}`,
     `Calls made: ${out.filter(e=>e.type==="call").length}. Texts sent: ${out.filter(e=>e.type==="text").length}. Replies to my texts: ${lv.filter(e=>e.replyTo||(e.thread||[]).some(m=>m.from==="them")).length}. They contacted me first: ${lv.filter(e=>e.type!=="note"&&dirOf(e)==="in"&&!e.replyTo).length}. Notes: ${lv.filter(e=>e.type==="note").length}.`];
   if(withShots&&figs.length)lines.push(`Screenshots: ${figs.length}, shown at the end of this report as Fig 1 to Fig ${figs.length}.`);
@@ -1281,12 +1306,53 @@ async function exportPDF(r,withShots){
   const n=doc.internal.getNumberOfPages();
   for(let i=1;i<=n;i++){doc.setPage(i);doc.setFontSize(7.5);doc.setTextColor(110);
     doc.text(footer,30,H-20,{maxWidth:W-110});doc.text(`Page ${i} of ${n}`,W-30,H-20,{align:"right"});doc.setTextColor(0)}
-  const data=doc.output("arraybuffer");const name=`contact-log-${slug()}-${dayKey(new Date())}.pdf`;
-  S.pdfReady={name,data};setBtn("Make PDF report");
-  const mb=(data.byteLength/1048576).toFixed(1);
-  if(ready)ready.innerHTML=`<div class="shotbox has"><span class="shotok">✓ Report ready: ${n} page${n===1?"":"s"}${withShots&&figs.length?`, ${figs.length} screenshot${figs.length===1?"":"s"}`:""} (${mb} MB)</span><button class="primary" type="button" data-pdfsave>Save or send report</button><span class="small muted">Choose Mail, Messages or WhatsApp to send it, or Save to Files to keep a copy.</span></div>`;
-  }catch(err){setBtn("Make PDF report");toast("Couldn't make the report. Try a shorter period, or turn off screenshots.")}
+  const data=doc.output("arraybuffer");
+  return {data,name,pages:n,figs:withShots?figs.length:0};
+  }
 }
+const fmtSize=b=>b<1048576?Math.max(1,Math.round(b/1024))+" KB":(b/1048576).toFixed(1)+" MB";
+// ---------- monthly report ----------
+const monthKey=d=>d.getFullYear()+"-"+pad2(d.getMonth()+1);
+const monthName=k=>{const [y,m]=k.split("-").map(Number);return new Date(y,m-1,1).toLocaleDateString([], {month:"long",year:"numeric"})};
+function monthRange(k){const [y,m]=k.split("-").map(Number);return {start:new Date(y,m-1,1),end:new Date(y,m,0)}}
+function monthHasData(k){const {start,end}=monthRange(k);const endX=new Date(end.getFullYear(),end.getMonth(),end.getDate()+1);
+  return S.entries.some(e=>!e.test&&new Date(e.at)>=start&&new Date(e.at)<endX)||Object.keys(S.days).some(d=>d.startsWith(k)&&((S.days[d].shots||[]).length))}
+function dueMonth(){
+  const t=new Date();const last=new Date(t.getFullYear(),t.getMonth()+1,0).getDate()===t.getDate();
+  const cands=[];if(last)cands.push(monthKey(t));cands.push(monthKey(new Date(t.getFullYear(),t.getMonth()-1,1)));
+  for(const k of cands){if(S.monthly.done[k]||S.monthSkip===k)continue;if(monthHasData(k))return k}
+  return null;
+}
+async function checkMonthly(){
+  if(S.monthBusy||!S.canWrite||S.dbState!=="ready"||!S.monthlyLoaded)return;
+  const k=dueMonth();if(!k)return;
+  S.monthBusy=true;S.monthReady=null;
+  const name=monthName(k),mon=name.split(" ")[0];const t=new Date();const isLast=monthKey(t)===k;
+  $("mEyebrow").textContent="Monthly report";
+  $("mTitle").textContent=`Your ${name} report`;
+  $("mText").textContent=isLast?`It's the last day of ${mon}. Save this month's report to Files before you carry on.`:`You haven't saved your ${mon} report yet. Save it to Files before you carry on.`;
+  const st=$("mStatus");st.className="mstatus";st.textContent="Making the report…";$("mSave").disabled=true;
+  $("monthly").hidden=false;
+  try{
+    const {start,end}=monthRange(k);const endX=new Date(end.getFullYear(),end.getMonth(),end.getDate()+1);
+    const list=S.entries.filter(e=>!e.test&&new Date(e.at)>=start&&new Date(e.at)<endX).slice().sort((a,b)=>new Date(a.at)-new Date(b.at));
+    const rep=await buildReport({list,start,end,period:name,span:end.getDate(),withShots:true,name:`contact-log-${slug()}-${k}.pdf`,onProgress:x=>{st.textContent=x}});
+    S.monthReady={k,name:rep.name,data:rep.data};
+    st.className="mstatus ok";st.textContent=`✓ Ready: ${rep.pages} page${rep.pages===1?"":"s"}${rep.figs?`, ${rep.figs} screenshot${rep.figs===1?"":"s"}`:""} (${fmtSize(rep.data.byteLength)})`;
+    $("mSave").disabled=false;
+  }catch(_){st.className="mstatus bad";st.textContent="The report couldn't be made. Tap Not now and try again later from Export.";}
+  S.monthBusy=false;
+}
+document.addEventListener("click",async ev=>{
+  const t=ev.target.closest("[data-msave],[data-mskip]");if(!t)return;
+  if(t.dataset.mskip!==undefined){S.monthSkip=S.monthReady?S.monthReady.k:dueMonth();$("monthly").hidden=true;toast("The report will ask again next time you open the app");return}
+  if(!S.monthReady)return;
+  const ok=await save(S.monthReady.name,S.monthReady.data);
+  if(ok){const k=S.monthReady.k;S.monthly={done:{...S.monthly.done,[k]:new Date().toISOString()}};
+    try{await S.db.doc("config/monthly").set(S.monthly)}catch(_){}
+    $("monthly").hidden=true;toast(monthName(k)+" report saved");S.monthReady=null;setTimeout(checkMonthly,500)}
+});
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)setTimeout(checkMonthly,800)});
 // ---------- events ----------
 const SEL="[data-act],[data-open],[data-close],[data-outcome],[data-kind],[data-save],[data-copy],[data-savecfg],[data-savepast],[data-savein],[data-savenote],[data-voidask],[data-voidyes],[data-voidno],[data-unvoid],[data-pdf],[data-pdfsave],[data-csv],[data-backup],[data-tab],[data-day],[data-f],[data-untest],[data-reply],[data-savereply],[data-ungroup],[data-menu],[data-otherpick],[data-pickother],[data-otheract],[data-rmother]";
 document.addEventListener("click",async ev=>{
@@ -1449,7 +1515,8 @@ render();
   db.doc("config/main").onSnapshot(s=>{if(s.exists){const d=s.data();S.cfg={...DEFAULT_CFG,...d,phones:{...DEFAULT_CFG.phones,...(d.phones||{})},others:(Array.isArray(d.others)?d.others:[]).map((o,i)=>o&&o.id?o:{...o,id:"o_legacy"+i+"_"+String(o&&o.label||"").toLowerCase().replace(/[^a-z0-9]/g,"")})}}S.cfgLoaded=true;render()},()=>{});
   db.doc("config/backup").onSnapshot(s=>{S.lastBackup=s.exists?(s.data().lastAt||null):null;S.backupLoaded=true;render()},()=>{});
   db.collection("days").onSnapshot(s=>{const m={};s.docs.forEach(d=>{m[d.id]=d.data()});S.days=m;render()},()=>{});
-  db.collection("log").onSnapshot(s=>{S.entries=s.docs.map(d=>({id:d.id,...d.data()}));sortEntries();S.dbState="ready";render();
+  db.doc("config/monthly").onSnapshot(s=>{S.monthly=s.exists?{done:{},...s.data()}:{done:{}};S.monthlyLoaded=true;setTimeout(checkMonthly,300)},()=>{});
+  db.collection("log").onSnapshot(s=>{S.entries=s.docs.map(d=>({id:d.id,...d.data()}));sortEntries();S.dbState="ready";render();setTimeout(checkMonthly,300);
     if(sheetCtx&&sheetCtx.kind==="entry"&&!getEntry(sheetCtx.id))closeSheet();},
     ()=>toast("Couldn't open your log. Close the app and open it again."));
   if("serviceWorker" in navigator&&location.protocol==="https:"){
