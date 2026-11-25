@@ -385,7 +385,7 @@ button.ghead{width:100%;border:0;text-align:left;font:inherit;color:inherit;curs
 (function(){
 "use strict";
 // ---------- state ----------
-const APP_VERSION="13";
+const APP_VERSION="14";
 const DEFAULT_CFG={child:"Cass",phones:{mum:{label:"Christie",number:""},gran:{label:"May",number:""}},others:[]};
 const S={open:new Set(),days:{},entries:[],cfg:JSON.parse(JSON.stringify(DEFAULT_CFG)),cfgLoaded:false,db:null,assets:null,downloads:null,
   canWrite:true,lastBackup:null,backupLoaded:false,
@@ -1137,11 +1137,13 @@ function exportSheet(){
     <div class="sh"><h2>Export or back up</h2>${closeBtn}</div>
     <div class="field"><label class="label" for="xRange">Period</label>
       <select id="xRange"><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="180">Last 6 months</option><option value="all">Everything</option></select></div>
-    <button class="primary" type="button" data-pdf>Download PDF report</button>
+    <label class="orow" style="cursor:pointer"><span class="nm"><b>Include screenshots</b><span class="small muted">Adds every screenshot at the end of the report, numbered and linked to its event.</span></span><input id="xShots" type="checkbox" style="width:24px;height:24px;flex:none" checked></label>
+    <button class="primary" type="button" data-pdf id="xPdfBtn">Make PDF report</button>
+    <div id="xReady"></div>
     <button class="secondary" type="button" data-csv>Download spreadsheet (CSV)</button>
     <button class="secondary" type="button" data-backup>Save full backup</button>
     <label class="secondary filepick" style="text-align:center;cursor:pointer">Restore from a backup<input id="restoreFile" type="file" accept=".json,application/json"></label>
-    <div class="muted small">The PDF lists every entry with its contact time, when it was logged, edits and entries added later, so the record is transparent.</div>
+    <div class="muted small">The PDF report is the file to send to a lawyer, mediator or anyone else. It lists every entry with both time zones, when it was logged, edits and entries added later, so the record is transparent. The backup is only for restoring the app.</div>
   `,{kind:"export"});
 }
 
@@ -1197,35 +1199,96 @@ async function exportBackup(){
   const ok=await save(`contact-log-backup-${dayKey(new Date())}.json`,JSON.stringify({app:"calls-to-cass",version:2,exported:new Date().toISOString(),timezone:tz,config:S.cfg,entries:S.entries,days:S.days,screenshots:shots}));
   if(ok){const at=new Date().toISOString();S.lastBackup=at;render();if(S.db){try{await S.db.doc("config/backup").set({lastAt:at})}catch(_){}}}
 }
-function exportPDF(r){
+function pdfImage(id){
+  return new Promise(async res=>{
+    try{const b=await LocalStore.blobs.get(id);if(!b){res(null);return}
+      const url=URL.createObjectURL(b);const img=new Image();
+      img.onload=()=>{try{const max=1400,sc=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));
+        const c=document.createElement("canvas");c.width=Math.round(img.naturalWidth*sc);c.height=Math.round(img.naturalHeight*sc);
+        const g=c.getContext("2d");g.fillStyle="#fff";g.fillRect(0,0,c.width,c.height);g.drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(url);
+        res({data:c.toDataURL("image/jpeg",0.72),w:c.width,h:c.height})}catch(_){URL.revokeObjectURL(url);res(null)}};
+      img.onerror=()=>{URL.revokeObjectURL(url);res(null)};img.src=url;
+    }catch(_){res(null)}
+  });
+}
+async function exportPDF(r,withShots){
   if(!window.jspdf||!window.jspdf.jsPDF){toast("The PDF tool didn't load. Try the spreadsheet instead.");return}
-  const list=rangeEntries(r);const rows=list.map(rowOf);
+  const btn=$("xPdfBtn"),ready=$("xReady");S.pdfReady=null;if(ready)ready.innerHTML="";
+  const setBtn=t=>{if(btn){btn.textContent=t;btn.disabled=t!=="Make PDF report"}};
+  setBtn("Making report…");
+  try{
+  const list=rangeEntries(r);
+  const start=r==="all"?null:new Date(new Date().getFullYear(),new Date().getMonth(),new Date().getDate()-(Number(r)-1));
+  // figures: by day, entry screenshots in time order, then that day's screenshots
+  const figs=[];const figOf={};
+  if(withShots){
+    const dayKeys=new Set(list.filter(e=>(e.attachments||[]).length).map(e=>dayKey(e.at)));
+    for(const k of Object.keys(S.days))if((S.days[k].shots||[]).length&&(!start||fromKey(k)>=start))dayKeys.add(k);
+    for(const k of [...dayKeys].sort()){
+      for(const e of list.filter(x=>dayKey(x.at)===k))for(const a of (e.attachments||[])){figs.push({id:a.id,day:k,entry:e});(figOf[e.id]=figOf[e.id]||[]).push(figs.length)}
+      for(const a of ((S.days[k]||{}).shots||[]))figs.push({id:a.id,day:k,entry:null});
+    }
+  }
+  const rows=list.map(e=>{const x=rowOf(e);if(figOf[e.id]){const f=figOf[e.id];x.notes=[x.notes,"see Fig "+(f.length>1?f[0]+"–"+f[f.length-1]:f[0])].filter(Boolean).join(", ")}return x});
   const doc=new window.jspdf.jsPDF({unit:"pt",format:"letter"});
-  const W=doc.internal.pageSize.getWidth();
+  const W=doc.internal.pageSize.getWidth(),H=doc.internal.pageSize.getHeight();
   doc.setFont("helvetica","bold");doc.setFontSize(16);doc.text("Contact log: calls and texts to reach "+child(),40,48);
-  doc.setFont("helvetica","normal");doc.setFontSize(10);
+  doc.setFont("helvetica","normal");doc.setFontSize(9.5);
   const period=r==="all"?"All entries":"Last "+r+" days";
   const first=list.length?new Date(list[0].at).toLocaleDateString():"",last=list.length?new Date(list[list.length-1].at).toLocaleDateString():"";
-  doc.text(`${period}${list.length?` (${first} to ${last})`:""}. Generated ${fmtStamp(new Date())}${tz?" ("+tz+")":""}. Times shown in my time zone (${tz}) and ${UK_LABEL()} time (${ukTz()}).`,40,66);
+  let y=66;
+  const intro=doc.splitTextToSize(`${period}${list.length?` (${first} to ${last})`:""}. Generated ${fmtStamp(new Date())}${tz?" ("+tz+")":""}. Times are shown in my time zone (${tz}) and ${UK_LABEL()} time (${ukTz()}).`,W-80);
+  doc.text(intro,40,y);y+=intro.length*12+8;
   const lv=list.filter(e=>!e.voided);const out=lv.filter(isOutContact);
   const byOut=groupByDay(out);const byAll=groupByDay(lv);
   const spoke=Object.keys(byAll).filter(k=>byAll[k].some(e=>e.outcome==="spoke")).length;
   const span=r==="all"?(list.length?Math.round((fromKey(dayKey(new Date()))-fromKey(dayKey(list[0].at)))/864e5)+1:0):Number(r);
   const lines=[`Days I called or texted: ${Object.keys(byOut).length} of ${span}`,`Days I spoke to ${child()}: ${spoke}`,
-    `Calls made: ${out.filter(e=>e.type==="call").length}   Texts sent: ${out.filter(e=>e.type==="text").length}   Replies to my texts: ${lv.filter(e=>e.replyTo).length}   They contacted me first: ${lv.filter(e=>e.type!=="note"&&dirOf(e)==="in"&&!e.replyTo).length}   Notes: ${lv.filter(e=>e.type==="note").length}`];
-  {const ks=Object.keys(S.days).filter(k=>(S.days[k].shots||[]).length&&(r==="all"||fromKey(k)>=new Date(new Date().getFullYear(),new Date().getMonth(),new Date().getDate()-(Number(r)-1))));const n=ks.reduce((a,k)=>a+S.days[k].shots.length,0);if(n)lines.push(`Day screenshots kept in the app: ${n} across ${ks.length} day${ks.length===1?"":"s"} (included in the app backup)`)}
-  doc.setFontSize(11);lines.forEach((l,i)=>doc.text(l,40,90+i*16));
-  doc.autoTable({startY:96+lines.length*16,head:[["Date","My time",UK_LABEL()+" time","Type","Person","Result","Comment","Logged at","Notes"]],
+    `Calls made: ${out.filter(e=>e.type==="call").length}. Texts sent: ${out.filter(e=>e.type==="text").length}. Replies to my texts: ${lv.filter(e=>e.replyTo||(e.thread||[]).some(m=>m.from==="them")).length}. They contacted me first: ${lv.filter(e=>e.type!=="note"&&dirOf(e)==="in"&&!e.replyTo).length}. Notes: ${lv.filter(e=>e.type==="note").length}.`];
+  if(withShots&&figs.length)lines.push(`Screenshots: ${figs.length}, shown at the end of this report as Fig 1 to Fig ${figs.length}.`);
+  doc.setFontSize(10.5);for(const l of lines){const t=doc.splitTextToSize(l,W-80);doc.text(t,40,y);y+=t.length*14}
+  const footer="“Logged at” is when the entry was saved in the app. Entries “added later” were entered after the contact. Edits are kept, not overwritten.";
+  doc.autoTable({startY:y+8,head:[["Date","My time",UK_LABEL()+" time","Type","Person","Result","Comment","Logged at","Notes"]],
     body:rows.map(x=>[x.date,x.time,x.uk,x.type,x.phone,x.result,x.comment,x.logged,x.notes]),
     styles:{fontSize:7.5,cellPadding:3,overflow:"linebreak"},headStyles:{fillColor:[47,93,138]},
     columnStyles:{0:{cellWidth:44},1:{cellWidth:36},2:{cellWidth:52},3:{cellWidth:38},4:{cellWidth:52},5:{cellWidth:58},6:{cellWidth:"auto"},7:{cellWidth:62},8:{cellWidth:44}},
-    margin:{left:30,right:30},
-    didDrawPage:()=>{doc.setFontSize(7.5);doc.setTextColor(110);doc.text("“Logged at” is when the entry was saved in the app. Entries “added later” were entered after the contact. Edits are kept, not overwritten.",30,doc.internal.pageSize.getHeight()-20,{maxWidth:W-60});doc.setTextColor(0)}});
-  save(`contact-log-${slug()}-${dayKey(new Date())}.pdf`,doc.output("arraybuffer"));
+    margin:{left:30,right:30,bottom:40}});
+  // screenshots appendix
+  if(withShots&&figs.length){
+    doc.addPage();let py=48;const M=40,G=20,colW=(W-2*M-G)/2,maxH=H-48-60-40;
+    doc.setFont("helvetica","bold");doc.setFontSize(14);doc.text("Screenshots",M,py);py+=18;
+    doc.setFont("helvetica","normal");doc.setFontSize(9);doc.text("Numbered in date order. The Notes column in the table above points to each event's screenshots.",M,py);py+=18;
+    let curDay=null,col=0,rowH=0;
+    const newRow=()=>{if(col!==0){py+=rowH+16;col=0;rowH=0}};
+    for(let i=0;i<figs.length;i++){
+      const f=figs[i];setBtn(`Adding screenshots… ${i+1} of ${figs.length}`);
+      const im=await pdfImage(f.id);
+      if(f.day!==curDay){newRow();if(py+60>H-40){doc.addPage();py=48}
+        doc.setFont("helvetica","bold");doc.setFontSize(11);doc.text(fmtDayLong(fromKey(f.day)),M,py);py+=16;curDay=f.day}
+      const cap=f.entry?`Fig ${i+1}. ${fmtTime(f.entry.at)}${sameTz()?"":" ("+ukTime(f.entry.at)+" "+UK_LABEL()+")"} · ${whatOf(f.entry).replace(/<[^>]+>/g,"").replace(/&[a-z#0-9]+;/g,m=>({"&amp;":"&","&lt;":"<","&gt;":">","&quot;":'"',"&#39;":"'"}[m]||""))}${outcomeOf(f.entry)?" · "+outcomeOf(f.entry).label:""}`:`Fig ${i+1}. Screenshot saved for this day`;
+      doc.setFont("helvetica","normal");doc.setFontSize(8);const capL=doc.splitTextToSize(cap,colW);
+      let iw=colW,ih=im?colW*im.h/im.w:60;if(ih>maxH){ih=maxH;iw=im?maxH*im.w/im.h:colW}
+      const cellH=capL.length*10+4+ih;
+      if(py+cellH>H-40){doc.addPage();py=48;col=0;rowH=0}
+      const x=M+col*(colW+G);
+      doc.setTextColor(60);doc.text(capL,x,py+8);doc.setTextColor(0);
+      if(im){doc.addImage(im.data,"JPEG",x,py+capL.length*10+4,iw,ih);doc.setDrawColor(200);doc.rect(x,py+capL.length*10+4,iw,ih)}
+      else{doc.setDrawColor(200);doc.rect(x,py+capL.length*10+4,colW,60);doc.text("Screenshot not found on this phone.",x+8,py+capL.length*10+34)}
+      rowH=Math.max(rowH,cellH);col++;if(col===2){py+=rowH+16;col=0;rowH=0}
+    }
+  }
+  // footer and page numbers on every page
+  const n=doc.internal.getNumberOfPages();
+  for(let i=1;i<=n;i++){doc.setPage(i);doc.setFontSize(7.5);doc.setTextColor(110);
+    doc.text(footer,30,H-20,{maxWidth:W-110});doc.text(`Page ${i} of ${n}`,W-30,H-20,{align:"right"});doc.setTextColor(0)}
+  const data=doc.output("arraybuffer");const name=`contact-log-${slug()}-${dayKey(new Date())}.pdf`;
+  S.pdfReady={name,data};setBtn("Make PDF report");
+  const mb=(data.byteLength/1048576).toFixed(1);
+  if(ready)ready.innerHTML=`<div class="shotbox has"><span class="shotok">✓ Report ready: ${n} page${n===1?"":"s"}${withShots&&figs.length?`, ${figs.length} screenshot${figs.length===1?"":"s"}`:""} (${mb} MB)</span><button class="primary" type="button" data-pdfsave>Save or send report</button><span class="small muted">Choose Mail, Messages or WhatsApp to send it, or Save to Files to keep a copy.</span></div>`;
+  }catch(err){setBtn("Make PDF report");toast("Couldn't make the report. Try a shorter period, or turn off screenshots.")}
 }
-
 // ---------- events ----------
-const SEL="[data-act],[data-open],[data-close],[data-outcome],[data-kind],[data-save],[data-copy],[data-savecfg],[data-savepast],[data-savein],[data-savenote],[data-voidask],[data-voidyes],[data-voidno],[data-unvoid],[data-pdf],[data-csv],[data-backup],[data-tab],[data-day],[data-f],[data-untest],[data-reply],[data-savereply],[data-ungroup],[data-menu],[data-otherpick],[data-pickother],[data-otheract],[data-rmother]";
+const SEL="[data-act],[data-open],[data-close],[data-outcome],[data-kind],[data-save],[data-copy],[data-savecfg],[data-savepast],[data-savein],[data-savenote],[data-voidask],[data-voidyes],[data-voidno],[data-unvoid],[data-pdf],[data-pdfsave],[data-csv],[data-backup],[data-tab],[data-day],[data-f],[data-untest],[data-reply],[data-savereply],[data-ungroup],[data-menu],[data-otherpick],[data-pickother],[data-otheract],[data-rmother]";
 document.addEventListener("click",async ev=>{
   const t=ev.target.closest(SEL);
   if(!t)return;
@@ -1323,7 +1386,8 @@ document.addEventListener("click",async ev=>{
     const files=sheetCtx.files;closeSheet();
     if(files.length){toast("Saving screenshot…");e.attachments=await uploadFiles(files)}
     upsert(e);toast("Note saved");return}
-  if(D.pdf!==undefined){exportPDF($("xRange").value);return}
+  if(D.pdf!==undefined){exportPDF($("xRange").value,$("xShots").checked);return}
+  if(D.pdfsave!==undefined&&S.pdfReady){save(S.pdfReady.name,S.pdfReady.data);return}
   if(D.csv!==undefined){exportCSV($("xRange").value);return}
   if(D.backup!==undefined){exportBackup();return}
 });
